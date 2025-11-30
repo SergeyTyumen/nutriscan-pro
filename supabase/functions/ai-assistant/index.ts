@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, image } = await req.json();
+    const { messages, image, analyzeFood } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -54,17 +54,59 @@ serve(async (req) => {
       };
     }
 
+    // Build request body
+    const requestBody: any = {
+      model: 'google/gemini-2.5-flash',
+      messages: messagesWithSystem,
+    };
+
+    // If analyzing food from image, use tool calling for structured output
+    if (analyzeFood && image) {
+      requestBody.tools = [
+        {
+          type: "function",
+          function: {
+            name: "analyze_food_items",
+            description: "Извлечь структурированную информацию о продуктах на фото с калориями и БЖУ",
+            parameters: {
+              type: "object",
+              properties: {
+                foods: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string", description: "Название продукта на русском" },
+                      quantity: { type: "number", description: "Количество в граммах" },
+                      calories: { type: "number", description: "Калории" },
+                      protein: { type: "number", description: "Белки в граммах" },
+                      fat: { type: "number", description: "Жиры в граммах" },
+                      carbs: { type: "number", description: "Углеводы в граммах" }
+                    },
+                    required: ["name", "quantity", "calories", "protein", "fat", "carbs"],
+                    additionalProperties: false
+                  }
+                },
+                description: { type: "string", description: "Краткое описание блюда" }
+              },
+              required: ["foods", "description"],
+              additionalProperties: false
+            }
+          }
+        }
+      ];
+      requestBody.tool_choice = { type: "function", function: { name: "analyze_food_items" } };
+    } else {
+      requestBody.stream = true;
+    }
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: messagesWithSystem,
-        stream: true,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -85,6 +127,22 @@ serve(async (req) => {
       throw new Error('AI Gateway error');
     }
 
+    // If analyzing food, return structured JSON
+    if (analyzeFood && image) {
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (toolCall?.function?.arguments) {
+        const foodData = JSON.parse(toolCall.function.arguments);
+        return new Response(JSON.stringify(foodData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      throw new Error('Failed to analyze food');
+    }
+
+    // Otherwise stream the response
     return new Response(response.body, {
       headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
     });
