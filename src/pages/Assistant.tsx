@@ -28,6 +28,7 @@ type Message = {
   content: string;
   image?: string;
   foodData?: FoodAnalysis;
+  actions?: string[]; // AI actions like "Added water", "Added meal"
 };
 
 type FoodItem = {
@@ -48,7 +49,7 @@ const Assistant = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Привет! Я твой персональный помощник по питанию. Могу помочь с расчетом калорий, дать рекомендации или проанализировать фото еды. Чем могу помочь?'
+      content: 'Привет! Я твой умный помощник по питанию 🤖\n\nЯ могу:\n• Добавлять еду в дневник ("Добавь 2 яблока на завтрак")\n• Добавлять воду ("Добавь стакан воды")\n• Показывать статистику ("Сколько я съел сегодня?")\n• Анализировать фото еды 📸\n• Давать советы по питанию\n\nПросто скажи или напиши, что нужно сделать!'
     }
   ]);
   const [input, setInput] = useState('');
@@ -439,6 +440,20 @@ const Assistant = () => {
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     </div>
                     
+                    {message.actions && message.actions.length > 0 && (
+                      <div className="space-y-1">
+                        {message.actions.map((action, idx) => (
+                          <div 
+                            key={idx}
+                            className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/5 rounded-lg px-3 py-1.5"
+                          >
+                            <span className="text-primary">✓</span>
+                            <span>{action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
                     {message.foodData && message.role === 'assistant' && (
                       <Button
                         size="sm"
@@ -467,6 +482,42 @@ const Assistant = () => {
           </ScrollArea>
 
           <div className="p-4 border-t">
+            {/* Quick Actions */}
+            {messages.length === 1 && !isLoading && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setInput('Сколько я съел сегодня?');
+                  }}
+                  className="text-xs"
+                >
+                  📊 Статистика дня
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setInput('Добавь стакан воды');
+                  }}
+                  className="text-xs"
+                >
+                  💧 Добавить воду
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setInput('Мой прогресс за неделю');
+                  }}
+                  className="text-xs"
+                >
+                  📈 Прогресс недели
+                </Button>
+              </div>
+            )}
+
             {selectedImage && (
               <div className="mb-2 relative inline-block">
                 <img 
