@@ -7,6 +7,14 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 0
+    },
+    SpeechRecognition: {
+      permissions: {
+        microphone: 'Для распознавания голосовых команд'
+      }
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
     }
   }
 };
