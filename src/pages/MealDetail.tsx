@@ -2,9 +2,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, BookmarkPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -17,12 +19,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { useState } from 'react';
 
 const MealDetail = () => {
   const navigate = useNavigate();
   const { mealId } = useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [recipeName, setRecipeName] = useState('');
 
   const { data: meal, isLoading: mealLoading } = useQuery({
     queryKey: ['meal', mealId],
@@ -135,6 +149,50 @@ const MealDetail = () => {
     },
   });
 
+  const saveAsRecipe = useMutation({
+    mutationFn: async () => {
+      if (!recipeName.trim() || !meal || !foods) {
+        throw new Error('Не хватает данных');
+      }
+
+      const ingredients = foods.map(food => ({
+        name: food.food_name,
+        quantity: food.quantity,
+        unit: food.unit,
+        calories: food.calories,
+        protein: Number(food.protein),
+        fat: Number(food.fat),
+        carbs: Number(food.carbs),
+      }));
+
+      const { error } = await supabase
+        .from('saved_recipes')
+        .insert({
+          user_id: user?.id,
+          recipe_name: recipeName.trim(),
+          meal_type: meal.meal_type,
+          total_calories: meal.total_calories,
+          total_protein: meal.total_protein,
+          total_fat: meal.total_fat,
+          total_carbs: meal.total_carbs,
+          ingredients: ingredients,
+          photo_url: foods[0]?.photo_url || null,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Рецепт сохранён!');
+      setSaveDialogOpen(false);
+      setRecipeName('');
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+    onError: (error: any) => {
+      toast.error('Ошибка при сохранении рецепта');
+      console.error(error);
+    },
+  });
+
   if (mealLoading || foodsLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted flex items-center justify-center pb-20">
@@ -171,6 +229,45 @@ const MealDetail = () => {
               {new Date(meal.meal_date).toLocaleDateString('ru-RU')} • {meal.meal_time}
             </p>
           </div>
+          <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" className="rounded-2xl">
+                <BookmarkPlus className="h-5 w-5" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Сохранить как рецепт</DialogTitle>
+                <DialogDescription>
+                  Этот приём пищи будет сохранён для быстрого добавления
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="recipe-name">Название рецепта</Label>
+                  <Input
+                    id="recipe-name"
+                    value={recipeName}
+                    onChange={(e) => setRecipeName(e.target.value)}
+                    placeholder="Например: Мой любимый завтрак"
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+                  Отмена
+                </Button>
+                <Button
+                  onClick={() => saveAsRecipe.mutate()}
+                  disabled={!recipeName.trim() || saveAsRecipe.isPending}
+                  className="bg-gradient-primary hover:opacity-90 text-white border-0"
+                >
+                  Сохранить
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="icon" className="rounded-2xl">
