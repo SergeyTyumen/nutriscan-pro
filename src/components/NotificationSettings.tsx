@@ -119,7 +119,9 @@ export const NotificationSettings = () => {
   useEffect(() => {
     // Инициализируем сервис уведомлений при монтировании
     if (isNativePlatform()) {
-      notificationService.initialize();
+      notificationService.initialize().catch(error => {
+        console.error('Failed to initialize notification service:', error);
+      });
     }
   }, []);
 
