@@ -6,7 +6,6 @@ import { MacrosWidget } from '@/components/MacrosWidget';
 import { WaterWidget } from '@/components/WaterWidget';
 import { StreakWidget } from '@/components/StreakWidget';
 import { MealsList } from '@/components/MealsList';
-import { BottomNav } from '@/components/BottomNav';
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -52,8 +51,6 @@ const Index = () => {
           </div>
         </div>
       </div>
-
-      <BottomNav />
     </div>
   );
 };
