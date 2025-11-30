@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
+import { LogOut, Search } from 'lucide-react';
 import { CaloriesWidget } from '@/components/CaloriesWidget';
 import { MacrosWidget } from '@/components/MacrosWidget';
 import { WaterWidget } from '@/components/WaterWidget';
 import { StreakWidget } from '@/components/StreakWidget';
 import { MealsList } from '@/components/MealsList';
+import { FoodSearchDialog } from '@/components/FoodSearchDialog';
 
 const Index = () => {
   const { user, signOut } = useAuth();
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted pb-20">
@@ -46,11 +49,23 @@ const Index = () => {
           </div>
 
           <div className="pt-2">
-            <h2 className="text-lg font-semibold text-foreground mb-3">Сегодня</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-foreground">Сегодня</h2>
+              <Button
+                onClick={() => setSearchDialogOpen(true)}
+                size="sm"
+                className="gap-2"
+              >
+                <Search className="w-4 h-4" />
+                Добавить еду
+              </Button>
+            </div>
             <MealsList />
           </div>
         </div>
       </div>
+
+      <FoodSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
     </div>
   );
 };

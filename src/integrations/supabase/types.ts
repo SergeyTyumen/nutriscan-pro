@@ -52,6 +52,39 @@ export type Database = {
           },
         ]
       }
+      food_database: {
+        Row: {
+          calories_per_100g: number
+          carbs_per_100g: number
+          category: string | null
+          created_at: string
+          fat_per_100g: number
+          id: string
+          name: string
+          protein_per_100g: number
+        }
+        Insert: {
+          calories_per_100g: number
+          carbs_per_100g?: number
+          category?: string | null
+          created_at?: string
+          fat_per_100g?: number
+          id?: string
+          name: string
+          protein_per_100g?: number
+        }
+        Update: {
+          calories_per_100g?: number
+          carbs_per_100g?: number
+          category?: string | null
+          created_at?: string
+          fat_per_100g?: number
+          id?: string
+          name?: string
+          protein_per_100g?: number
+        }
+        Relationships: []
+      }
       meal_foods: {
         Row: {
           added_via: string | null
