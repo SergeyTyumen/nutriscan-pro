@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Coffee, Sunrise, Sun, Moon } from 'lucide-react';
+import { Coffee, Sunrise, Sun, Moon, ChevronRight } from 'lucide-react';
 
 export const MealsList = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const { data: todayMeals } = useQuery({
     queryKey: ['today-meals-list', user?.id],
@@ -63,23 +65,25 @@ export const MealsList = () => {
       {todayMeals.map((meal) => (
         <Card
           key={meal.id}
-          className="bg-card p-4 shadow-md border-border hover:shadow-lg transition-shadow"
+          className="bg-card p-4 shadow-md border-border hover:shadow-lg transition-all cursor-pointer"
+          onClick={() => navigate(`/meal/${meal.id}`)}
         >
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl ${getMealGradient(meal.meal_type)} flex items-center justify-center text-white`}>
+            <div className={`w-12 h-12 rounded-2xl ${getMealGradient(meal.meal_type)} flex items-center justify-center text-white flex-shrink-0`}>
               {getMealIcon(meal.meal_type)}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-foreground capitalize">{meal.meal_type}</h4>
               <p className="text-sm text-muted-foreground">{meal.meal_time}</p>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <p className="text-lg font-bold text-foreground">{meal.total_calories}</p>
               <p className="text-xs text-muted-foreground">ккал</p>
             </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
           </div>
           {meal.notes && (
-            <p className="text-sm text-muted-foreground mt-2 pl-16">{meal.notes}</p>
+            <p className="text-sm text-muted-foreground mt-2 pl-16 truncate">{meal.notes}</p>
           )}
         </Card>
       ))}
