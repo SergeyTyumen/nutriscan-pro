@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Mic, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { isNativePlatform } from '@/utils/platform';
 
-// Типы для Web Speech API
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
+// Capacitor Speech Recognition
+let SpeechRecognition: any = null;
+if (isNativePlatform()) {
+  import('@capacitor-community/speech-recognition').then(module => {
+    SpeechRecognition = module.SpeechRecognition;
+  });
 }
 
 type VitaState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -17,79 +18,91 @@ export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const wakeWordRecognitionRef = useRef<any>(null);
+  const recognitionActiveRef = useRef(false);
   const { toast } = useToast();
 
-  // Постоянное прослушивание wake word "Вита"
+  // Инициализация для нативной платформы
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      console.warn('Speech Recognition API not supported');
-      return;
-    }
+    if (!isNativePlatform() || !SpeechRecognition) return;
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'ru-RU';
+    const initNativeSpeechRecognition = async () => {
+      try {
+        // Запрашиваем разрешения
+        const { available } = await SpeechRecognition.available();
+        if (!available) {
+          console.warn('Speech recognition not available');
+          return;
+        }
 
-    recognition.onresult = (event: any) => {
-      const last = event.results[event.results.length - 1];
-      const transcript = last[0].transcript.toLowerCase();
-      
-      console.log('Wake word detection:', transcript);
-      
-      // Проверяем wake word "вита"
-      if (transcript.includes('вита') && state === 'idle') {
-        console.log('Wake word detected!');
-        recognition.stop();
-        startListening();
+        const permission = await SpeechRecognition.requestPermissions();
+        if (permission.speechRecognition !== 'granted') {
+          console.warn('Speech recognition permission denied');
+          return;
+        }
+
+        // Запускаем непрерывное прослушивание wake word
+        startWakeWordDetection();
+      } catch (error) {
+        console.error('Failed to initialize speech recognition:', error);
       }
     };
 
-    recognition.onerror = (event: any) => {
-      console.error('Wake word recognition error:', event.error);
-      // Перезапуск при ошибке
-      if (event.error !== 'aborted') {
-        setTimeout(() => {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.error('Failed to restart recognition:', e);
-          }
-        }, 1000);
-      }
-    };
-
-    recognition.onend = () => {
-      // Перезапуск после остановки (если не в процессе обработки)
-      if (state === 'idle') {
-        setTimeout(() => {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.error('Failed to restart recognition:', e);
-          }
-        }, 500);
-      }
-    };
-
-    wakeWordRecognitionRef.current = recognition;
-
-    // Запускаем прослушивание
-    try {
-      recognition.start();
-      console.log('Wake word detection started');
-    } catch (e) {
-      console.error('Failed to start wake word detection:', e);
-    }
+    initNativeSpeechRecognition();
 
     return () => {
-      recognition.stop();
-      wakeWordRecognitionRef.current = null;
+      stopWakeWordDetection();
     };
-  }, [state]);
+  }, []);
+
+  const startWakeWordDetection = async () => {
+    if (!isNativePlatform() || !SpeechRecognition || recognitionActiveRef.current) return;
+
+    try {
+      recognitionActiveRef.current = true;
+
+      // Слушатель для частичных результатов
+      SpeechRecognition.addListener('partialResults', (data: any) => {
+        const text = data.matches?.join(' ').toLowerCase() || '';
+        console.log('Wake word detection:', text);
+
+        if (text.includes('вита') && state === 'idle') {
+          console.log('Wake word detected!');
+          stopWakeWordDetection();
+          startListening();
+        }
+      });
+
+      // Запуск распознавания
+      await SpeechRecognition.start({
+        language: 'ru-RU',
+        partialResults: true,
+        popup: false,
+      });
+
+      console.log('Wake word detection started (native)');
+    } catch (error) {
+      console.error('Failed to start wake word detection:', error);
+      recognitionActiveRef.current = false;
+      
+      // Повторная попытка через 2 секунды
+      setTimeout(() => {
+        if (state === 'idle') startWakeWordDetection();
+      }, 2000);
+    }
+  };
+
+  const stopWakeWordDetection = async () => {
+    if (!isNativePlatform() || !SpeechRecognition || !recognitionActiveRef.current) return;
+
+    try {
+      await SpeechRecognition.stop();
+      SpeechRecognition.removeAllListeners();
+      recognitionActiveRef.current = false;
+      console.log('Wake word detection stopped');
+    } catch (error) {
+      console.error('Failed to stop wake word detection:', error);
+    }
+  };
 
   const startListening = async () => {
     try {
@@ -129,6 +142,11 @@ export const VitaButton = () => {
         variant: "destructive"
       });
       setState('idle');
+      
+      // Перезапускаем прослушивание wake word
+      if (isNativePlatform()) {
+        setTimeout(() => startWakeWordDetection(), 1000);
+      }
     }
   };
 
@@ -147,45 +165,78 @@ export const VitaButton = () => {
           throw new Error('Failed to convert audio');
         }
 
-        // Отправляем на распознавание
-        const { data: transcription, error: transcriptionError } = await supabase.functions.invoke('voice-to-text', {
-          body: { audio: base64Audio }
-        });
+        try {
+          // Отправляем на распознавание
+          const { data: transcription, error: transcriptionError } = await supabase.functions.invoke('voice-to-text', {
+            body: { audio: base64Audio }
+          });
 
-        if (transcriptionError || !transcription?.text) {
-          throw new Error('Failed to transcribe audio');
-        }
-
-        console.log('Transcribed text:', transcription.text);
-
-        // Отправляем в AI ассистента
-        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
-          body: { 
-            messages: [
-              { role: 'user', content: transcription.text }
-            ]
+          if (transcriptionError) {
+            console.error('Transcription error:', transcriptionError);
+            throw new Error('Failed to transcribe audio');
           }
-        });
 
-        if (aiError || !aiResponse) {
-          throw new Error('Failed to get AI response');
-        }
+          if (!transcription?.text) {
+            throw new Error('No transcription text received');
+          }
 
-        console.log('AI response:', aiResponse);
+          console.log('Transcribed text:', transcription.text);
 
-        // Только озвучиваем ответ (без toast)
-        setState('speaking');
-        await speakResponse(aiResponse.response || aiResponse.message);
+          // Отправляем в AI ассистента
+          const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
+            body: { 
+              messages: [
+                { role: 'user', content: transcription.text }
+              ]
+            }
+          });
 
-        // Перезапускаем прослушивание wake word
-        if (wakeWordRecognitionRef.current) {
-          try {
-            wakeWordRecognitionRef.current.start();
-          } catch (e) {
-            console.error('Failed to restart wake word detection:', e);
+          if (aiError) {
+            console.error('AI error:', aiError);
+            throw new Error('Failed to get AI response');
+          }
+
+          if (!aiResponse) {
+            throw new Error('No AI response received');
+          }
+
+          console.log('AI response:', aiResponse);
+
+          // Озвучиваем ответ
+          setState('speaking');
+          await speakResponse(aiResponse.response || aiResponse.message);
+
+        } catch (error: any) {
+          console.error('Processing error:', error);
+          
+          // Показываем дружественную ошибку пользователю
+          if (error.message?.includes('429') || error.status === 429) {
+            toast({
+              title: "Слишком много запросов",
+              description: "Попробуйте позже",
+              variant: "destructive"
+            });
+          } else if (error.message?.includes('402') || error.status === 402) {
+            toast({
+              title: "Превышен лимит",
+              description: "Пополните баланс",
+              variant: "destructive"
+            });
+          } else {
+            toast({
+              title: "Ошибка",
+              description: "Не удалось обработать команду",
+              variant: "destructive"
+            });
+          }
+          
+          setState('idle');
+          
+          // Перезапускаем прослушивание
+          if (isNativePlatform()) {
+            setTimeout(() => startWakeWordDetection(), 1000);
           }
         }
-
       };
 
     } catch (error) {
@@ -196,6 +247,11 @@ export const VitaButton = () => {
         variant: "destructive"
       });
       setState('idle');
+      
+      // Перезапускаем прослушивание
+      if (isNativePlatform()) {
+        setTimeout(() => startWakeWordDetection(), 1000);
+      }
     }
   };
 
@@ -214,10 +270,17 @@ export const VitaButton = () => {
       
       audio.onended = () => {
         setState('idle');
+        // Перезапускаем прослушивание wake word после озвучки
+        if (isNativePlatform()) {
+          setTimeout(() => startWakeWordDetection(), 500);
+        }
       };
 
       audio.onerror = () => {
         setState('idle');
+        if (isNativePlatform()) {
+          setTimeout(() => startWakeWordDetection(), 500);
+        }
       };
 
       await audio.play();
@@ -225,6 +288,9 @@ export const VitaButton = () => {
     } catch (error) {
       console.error('Error speaking response:', error);
       setState('idle');
+      if (isNativePlatform()) {
+        setTimeout(() => startWakeWordDetection(), 500);
+      }
     }
   };
 
@@ -271,7 +337,7 @@ export const VitaButton = () => {
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
         state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
       }`}
-      title={state === 'idle' ? 'Нажмите или скажите "Вита"' : 'Обработка...'}
+      title={state === 'idle' ? (isNativePlatform() ? 'Нажмите или скажите "Вита"' : 'Нажмите для записи') : 'Обработка...'}
     >
       {getButtonContent()}
       <span className="text-xs font-semibold">Вита</span>

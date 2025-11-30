@@ -3,13 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Droplet, Plus } from 'lucide-react';
+import { Droplet, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const WaterWidget = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -44,7 +44,10 @@ export const WaterWidget = () => {
   const percentage = Math.min((totalWater / goal) * 100, 100);
 
   const addWater = async (amount: number) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      toast.error('Необходима авторизация');
+      return;
+    }
     
     const { error } = await supabase.from('water_log').insert({
       user_id: user.id,
@@ -58,6 +61,26 @@ export const WaterWidget = () => {
       refetch();
     }
   };
+
+  if (loading || profileLoading) {
+    return (
+      <Card className="bg-card p-6 shadow-md border-border">
+        <div className="flex items-center justify-center h-32">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Card className="bg-card p-6 shadow-md border-border">
+        <div className="text-center text-muted-foreground p-4">
+          Войдите для отслеживания воды
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-card p-6 shadow-md border-border">
