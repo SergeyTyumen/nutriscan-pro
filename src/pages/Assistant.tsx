@@ -3,13 +3,45 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, Send, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Mic, Send, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type Message = {
   role: 'user' | 'assistant';
   content: string;
   image?: string;
+  foodData?: FoodAnalysis;
+};
+
+type FoodItem = {
+  name: string;
+  quantity: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+};
+
+type FoodAnalysis = {
+  foods: FoodItem[];
+  description: string;
 };
 
 const Assistant = () => {
@@ -23,11 +55,16 @@ const Assistant = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [selectedMealType, setSelectedMealType] = useState<string>('');
+  const [currentFoodData, setCurrentFoodData] = useState<FoodAnalysis | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -126,12 +163,159 @@ const Assistant = () => {
     }
   };
 
+  const analyzeFoodImage = async (image: string) => {
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: 'user',
+                content: 'Проанализируй эту еду и определи продукты с калориями и БЖУ'
+              }
+            ],
+            image,
+            analyzeFood: true
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze food');
+      }
+
+      const foodData: FoodAnalysis = await response.json();
+      
+      const totalCalories = foodData.foods.reduce((sum, f) => sum + f.calories, 0);
+      const totalProtein = foodData.foods.reduce((sum, f) => sum + f.protein, 0);
+      const totalFat = foodData.foods.reduce((sum, f) => sum + f.fat, 0);
+      const totalCarbs = foodData.foods.reduce((sum, f) => sum + f.carbs, 0);
+
+      const analysisText = `${foodData.description}\n\nОбнаружено:\n${foodData.foods.map(f => 
+        `• ${f.name} (${f.quantity}г): ${f.calories} ккал, Б: ${f.protein}г, Ж: ${f.fat}г, У: ${f.carbs}г`
+      ).join('\n')}\n\nВсего: ${totalCalories} ккал, Б: ${totalProtein.toFixed(1)}г, Ж: ${totalFat.toFixed(1)}г, У: ${totalCarbs.toFixed(1)}г`;
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: analysisText,
+        foodData
+      }]);
+
+      setCurrentFoodData(foodData);
+      
+    } catch (error) {
+      console.error('Food analysis error:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось проанализировать еду',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+      setSelectedImage(null);
+    }
+  };
+
+  const addToMealDiary = async () => {
+    if (!currentFoodData || !selectedMealType || !user) return;
+
+    try {
+      setIsLoading(true);
+
+      const totalCalories = currentFoodData.foods.reduce((sum, f) => sum + f.calories, 0);
+      const totalProtein = currentFoodData.foods.reduce((sum, f) => sum + f.protein, 0);
+      const totalFat = currentFoodData.foods.reduce((sum, f) => sum + f.fat, 0);
+      const totalCarbs = currentFoodData.foods.reduce((sum, f) => sum + f.carbs, 0);
+
+      const now = new Date();
+      const { data: meal, error: mealError } = await supabase
+        .from('meals')
+        .insert({
+          user_id: user.id,
+          meal_type: selectedMealType,
+          meal_date: now.toISOString().split('T')[0],
+          meal_time: now.toTimeString().split(' ')[0],
+          total_calories: totalCalories,
+          total_protein: totalProtein,
+          total_fat: totalFat,
+          total_carbs: totalCarbs,
+          notes: currentFoodData.description
+        })
+        .select()
+        .single();
+
+      if (mealError) throw mealError;
+
+      const foodItems = currentFoodData.foods.map(food => ({
+        meal_id: meal.id,
+        food_name: food.name,
+        quantity: food.quantity,
+        unit: 'г',
+        calories: food.calories,
+        protein: food.protein,
+        fat: food.fat,
+        carbs: food.carbs,
+        added_via: 'ai_analysis'
+      }));
+
+      const { error: foodsError } = await supabase
+        .from('meal_foods')
+        .insert(foodItems);
+
+      if (foodsError) throw foodsError;
+
+      toast({
+        title: 'Успешно',
+        description: 'Еда добавлена в дневник питания'
+      });
+
+      setShowAddDialog(false);
+      setCurrentFoodData(null);
+      
+      navigate('/');
+
+    } catch (error) {
+      console.error('Add to diary error:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось добавить в дневник',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() && !selectedImage) return;
     
     const messageText = input.trim() || 'Проанализируй эту еду';
     setInput('');
-    await streamChat(messageText, selectedImage || undefined);
+
+    // If there's an image and the message is about food analysis
+    if (selectedImage && (messageText.toLowerCase().includes('еда') || 
+        messageText.toLowerCase().includes('калории') || 
+        messageText.toLowerCase().includes('проанализ') ||
+        messageText === 'Проанализируй эту еду')) {
+      
+      setMessages(prev => [...prev, {
+        role: 'user',
+        content: messageText,
+        image: selectedImage
+      }]);
+
+      await analyzeFoodImage(selectedImage);
+    } else {
+      await streamChat(messageText, selectedImage || undefined);
+    }
   };
 
   const startRecording = async () => {
@@ -237,21 +421,38 @@ const Assistant = () => {
                   key={index}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    {message.image && (
-                      <img 
-                        src={message.image} 
-                        alt="Uploaded" 
-                        className="max-w-full rounded-lg mb-2"
-                      />
+                  <div className="flex flex-col gap-2">
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      {message.image && (
+                        <img 
+                          src={message.image} 
+                          alt="Uploaded" 
+                          className="max-w-full rounded-lg mb-2"
+                        />
+                      )}
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                    
+                    {message.foodData && message.role === 'assistant' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-fit"
+                        onClick={() => {
+                          setCurrentFoodData(message.foodData!);
+                          setShowAddDialog(true);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Добавить в дневник
+                      </Button>
                     )}
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
                 </div>
               ))}
@@ -330,6 +531,60 @@ const Assistant = () => {
             </div>
           </div>
         </Card>
+
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Добавить в дневник питания</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Тип приема пищи</label>
+                <Select value={selectedMealType} onValueChange={setSelectedMealType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите прием пищи" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="breakfast">Завтрак</SelectItem>
+                    <SelectItem value="lunch">Обед</SelectItem>
+                    <SelectItem value="dinner">Ужин</SelectItem>
+                    <SelectItem value="snack">Перекус</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {currentFoodData && (
+                <div className="bg-muted p-3 rounded-lg">
+                  <p className="text-sm font-medium mb-2">{currentFoodData.description}</p>
+                  <div className="text-xs space-y-1">
+                    {currentFoodData.foods.map((food, idx) => (
+                      <div key={idx}>
+                        • {food.name} ({food.quantity}г) - {food.calories} ккал
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddDialog(false)}
+                disabled={isLoading}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={addToMealDiary}
+                disabled={!selectedMealType || isLoading}
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Добавить'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
