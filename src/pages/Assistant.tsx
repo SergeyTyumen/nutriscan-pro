@@ -101,8 +101,7 @@ const Assistant = () => {
             role: m.role,
             content: m.content
           })),
-          ...(image && { image }),
-          stream: true
+          ...(image && { image })
         }
       });
 
@@ -114,18 +113,16 @@ const Assistant = () => {
         throw new Error('No response received');
       }
 
-      // Для streaming ответа
-      if (response.response) {
+      // Проверяем разные форматы ответа
+      const responseText = response.response || response.message || response.content;
+      
+      if (responseText) {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: response.response
+          content: responseText
         }]);
       } else {
-        // Fallback если нет ответа
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: 'Не удалось получить ответ'
-        }]);
+        throw new Error('No valid response format');
       }
     } catch (error) {
       console.error('Chat error:', error);
