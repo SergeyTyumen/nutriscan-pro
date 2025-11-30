@@ -87,6 +87,11 @@ export const NotificationSettings = () => {
     mutationFn: async (data: typeof formData) => {
       if (!user?.id) throw new Error('No user');
 
+      // Если включаем уведомления впервые, инициализируем сервис
+      if (data.push_enabled && !settings?.push_enabled) {
+        await notificationService.initialize();
+      }
+
       const { error } = await supabase
         .from('notification_settings')
         .update(data)
@@ -116,14 +121,7 @@ export const NotificationSettings = () => {
     updateSettings.mutate(formData);
   };
 
-  useEffect(() => {
-    // Инициализируем сервис уведомлений при монтировании
-    if (isNativePlatform()) {
-      notificationService.initialize().catch(error => {
-        console.error('Failed to initialize notification service:', error);
-      });
-    }
-  }, []);
+  // Не инициализируем автоматически - только при включении уведомлений
 
   if (!isNativePlatform()) {
     return (

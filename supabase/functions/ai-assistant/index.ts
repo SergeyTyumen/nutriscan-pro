@@ -497,7 +497,6 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'google/gemini-2.5-flash',
           messages: followUpMessages,
-          stream: true,
         }),
       });
 
@@ -505,26 +504,18 @@ serve(async (req) => {
         throw new Error('Follow-up AI call failed');
       }
 
-      return new Response(followUpResponse.body, {
-        headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
+      const followUpData = await followUpResponse.json();
+      const finalMessage = followUpData.choices?.[0]?.message?.content || 'Готово!';
+
+      return new Response(JSON.stringify({ response: finalMessage }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // No tools called, return regular message
     if (message?.content) {
-      const stream = new ReadableStream({
-        start(controller) {
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            choices: [{ delta: { content: message.content } }] 
-          })}\n\n`));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        }
-      });
-
-      return new Response(stream, {
-        headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
+      return new Response(JSON.stringify({ response: message.content }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 

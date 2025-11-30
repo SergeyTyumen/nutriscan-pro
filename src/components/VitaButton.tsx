@@ -125,31 +125,82 @@ export const VitaButton = () => {
     try {
       setState('listening');
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      // На нативной платформе используем SpeechRecognition
+      if (isNativePlatform()) {
+        const SpeechRecognition = await loadSpeechRecognition();
+        if (!SpeechRecognition) {
+          throw new Error('Speech recognition not available');
         }
-      };
 
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach(track => track.stop());
-        await processAudio(audioBlob);
-      };
+        // Останавливаем wake word detection
+        await stopWakeWordDetection();
 
-      mediaRecorder.start();
+        // Слушатель для результатов
+        const resultListener = SpeechRecognition.addListener('partialResults', async (data: any) => {
+          const text = data.matches?.[0] || '';
+          if (text) {
+            console.log('Recognized text:', text);
+            // Останавливаем распознавание
+            await SpeechRecognition.stop();
+            SpeechRecognition.removeAllListeners();
+            // Обрабатываем команду
+            await processVoiceCommand(text);
+          }
+        });
 
-      // Автоматическая остановка через 5 секунд
-      setTimeout(() => {
-        if (mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
-        }
-      }, 5000);
+        // Запускаем распознавание на 5 секунд
+        await SpeechRecognition.start({
+          language: 'ru-RU',
+          partialResults: true,
+          popup: false,
+        });
+
+        // Автоматическая остановка через 5 секунд
+        setTimeout(async () => {
+          try {
+            await SpeechRecognition.stop();
+            SpeechRecognition.removeAllListeners();
+            if (state === 'listening') {
+              toast({
+                title: "Ничего не распознано",
+                description: "Попробуйте еще раз",
+              });
+              setState('idle');
+              setTimeout(() => startWakeWordDetection(), 1000);
+            }
+          } catch (e) {
+            console.error('Error stopping recognition:', e);
+          }
+        }, 5000);
+
+      } else {
+        // На веб-платформе используем MediaRecorder
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          stream.getTracks().forEach(track => track.stop());
+          await processAudio(audioBlob);
+        };
+
+        mediaRecorder.start();
+
+        // Автоматическая остановка через 5 секунд
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        }, 5000);
+      }
 
     } catch (error) {
       console.error('Error starting recording:', error);
@@ -161,6 +212,67 @@ export const VitaButton = () => {
       setState('idle');
       
       // Перезапускаем прослушивание wake word
+      if (isNativePlatform()) {
+        setTimeout(() => startWakeWordDetection(), 1000);
+      }
+    }
+  };
+
+  const processVoiceCommand = async (text: string) => {
+    try {
+      setState('processing');
+
+      // Отправляем в AI ассистента
+      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
+        body: { 
+          messages: [
+            { role: 'user', content: text }
+          ]
+        }
+      });
+
+      if (aiError) {
+        console.error('AI error:', aiError);
+        throw new Error('Failed to get AI response');
+      }
+
+      if (!aiResponse) {
+        throw new Error('No AI response received');
+      }
+
+      console.log('AI response:', aiResponse);
+
+      // Озвучиваем ответ
+      setState('speaking');
+      await speakResponse(aiResponse.response || aiResponse.message || 'Не удалось получить ответ');
+
+    } catch (error: any) {
+      console.error('Processing error:', error);
+      
+      // Показываем дружественную ошибку пользователю
+      if (error.message?.includes('429') || error.status === 429) {
+        toast({
+          title: "Слишком много запросов",
+          description: "Попробуйте позже",
+          variant: "destructive"
+        });
+      } else if (error.message?.includes('402') || error.status === 402) {
+        toast({
+          title: "Превышен лимит",
+          description: "Пополните баланс",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось обработать команду",
+          variant: "destructive"
+        });
+      }
+      
+      setState('idle');
+      
+      // Перезапускаем прослушивание
       if (isNativePlatform()) {
         setTimeout(() => startWakeWordDetection(), 1000);
       }
