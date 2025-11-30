@@ -1,8 +1,15 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mic, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+
+// Типы для Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 type VitaState = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -10,7 +17,79 @@ export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const wakeWordRecognitionRef = useRef<any>(null);
   const { toast } = useToast();
+
+  // Постоянное прослушивание wake word "Вита"
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.warn('Speech Recognition API not supported');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'ru-RU';
+
+    recognition.onresult = (event: any) => {
+      const last = event.results[event.results.length - 1];
+      const transcript = last[0].transcript.toLowerCase();
+      
+      console.log('Wake word detection:', transcript);
+      
+      // Проверяем wake word "вита"
+      if (transcript.includes('вита') && state === 'idle') {
+        console.log('Wake word detected!');
+        recognition.stop();
+        startListening();
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Wake word recognition error:', event.error);
+      // Перезапуск при ошибке
+      if (event.error !== 'aborted') {
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error('Failed to restart recognition:', e);
+          }
+        }, 1000);
+      }
+    };
+
+    recognition.onend = () => {
+      // Перезапуск после остановки (если не в процессе обработки)
+      if (state === 'idle') {
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error('Failed to restart recognition:', e);
+          }
+        }, 500);
+      }
+    };
+
+    wakeWordRecognitionRef.current = recognition;
+
+    // Запускаем прослушивание
+    try {
+      recognition.start();
+      console.log('Wake word detection started');
+    } catch (e) {
+      console.error('Failed to start wake word detection:', e);
+    }
+
+    return () => {
+      recognition.stop();
+      wakeWordRecognitionRef.current = null;
+    };
+  }, [state]);
 
   const startListening = async () => {
     try {
@@ -94,15 +173,18 @@ export const VitaButton = () => {
 
         console.log('AI response:', aiResponse);
 
-        // Показываем текст ответа
-        toast({
-          title: "Вита",
-          description: aiResponse.response || aiResponse.message,
-        });
-
-        // Озвучиваем ответ
+        // Только озвучиваем ответ (без toast)
         setState('speaking');
         await speakResponse(aiResponse.response || aiResponse.message);
+
+        // Перезапускаем прослушивание wake word
+        if (wakeWordRecognitionRef.current) {
+          try {
+            wakeWordRecognitionRef.current.start();
+          } catch (e) {
+            console.error('Failed to restart wake word detection:', e);
+          }
+        }
 
       };
 
@@ -186,12 +268,13 @@ export const VitaButton = () => {
     <button
       onClick={startListening}
       disabled={state !== 'idle'}
-      className={`flex flex-col items-center gap-1 p-2 rounded-2xl text-white shadow-lg transition-all ${getButtonColor()} ${
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
         state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
       }`}
+      title={state === 'idle' ? 'Нажмите или скажите "Вита"' : 'Обработка...'}
     >
       {getButtonContent()}
-      <span className="text-xs font-medium">Вита</span>
+      <span className="text-xs font-semibold">Вита</span>
     </button>
   );
 };
