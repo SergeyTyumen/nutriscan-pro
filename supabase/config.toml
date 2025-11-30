@@ -2,3 +2,9 @@ project_id = "yjcqjszmyjbdjfigtiyx"
 
 [functions.analyze-food]
 verify_jwt = false
+
+[functions.ai-assistant]
+verify_jwt = false
+
+[functions.voice-to-text]
+verify_jwt = false

@@ -1,4 +1,4 @@
-import { Home, Camera, TrendingUp, User, BookMarked } from 'lucide-react';
+import { Home, Camera, TrendingUp, User, BookMarked, MessageCircle } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 export const BottomNav = () => {
@@ -8,6 +8,7 @@ export const BottomNav = () => {
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/recipes', icon: BookMarked, label: 'Рецепты' },
     { path: '/camera', icon: Camera, label: 'Камера' },
+    { path: '/assistant', icon: MessageCircle, label: 'Помощник' },
     { path: '/stats', icon: TrendingUp, label: 'Статистика' },
     { path: '/profile', icon: User, label: 'Профиль' },
   ];
