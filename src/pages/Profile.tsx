@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Save, Loader2, Moon, Sun, Palette } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Moon, Sun, Palette, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { useTheme } from '@/components/ThemeProvider';
@@ -19,6 +21,7 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile-edit', user?.id],
@@ -140,13 +143,39 @@ const Profile = () => {
               <Palette className="h-5 w-5 text-primary" />
               <h3 className="font-semibold text-lg">Внешний вид</h3>
             </div>
-            <div className="space-y-6">
-              <div>
-                <Label className="mb-3 block">Аватар</Label>
-                <AvatarPicker
-                  selectedAvatar={formData.avatar_url}
-                  onSelect={(avatar) => setFormData({ ...formData, avatar_url: avatar })}
-                />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-16 w-16 border-2 border-primary/20">
+                    <AvatarFallback className="text-3xl bg-gradient-to-br from-primary/10 to-accent/10">
+                      {formData.avatar_url || '🍎'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <Label>Аватар</Label>
+                    <p className="text-sm text-muted-foreground">Выберите свой аватар</p>
+                  </div>
+                </div>
+                <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Изменить
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Выберите аватар</DialogTitle>
+                    </DialogHeader>
+                    <AvatarPicker
+                      selectedAvatar={formData.avatar_url}
+                      onSelect={(avatar) => {
+                        setFormData({ ...formData, avatar_url: avatar });
+                        setIsAvatarDialogOpen(false);
+                      }}
+                    />
+                  </DialogContent>
+                </Dialog>
               </div>
               
               <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
