@@ -194,6 +194,75 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          achievement_notifications_enabled: boolean
+          breakfast_time: string
+          created_at: string
+          daily_stats_enabled: boolean
+          daily_stats_time: string
+          device_platform: string | null
+          dinner_time: string
+          id: string
+          lunch_time: string
+          meal_reminders_enabled: boolean
+          motivation_notifications_enabled: boolean
+          push_enabled: boolean
+          push_token: string | null
+          snack_time: string | null
+          updated_at: string
+          user_id: string
+          water_reminder_end: string
+          water_reminder_frequency: number
+          water_reminder_start: string
+          water_reminders_enabled: boolean
+        }
+        Insert: {
+          achievement_notifications_enabled?: boolean
+          breakfast_time?: string
+          created_at?: string
+          daily_stats_enabled?: boolean
+          daily_stats_time?: string
+          device_platform?: string | null
+          dinner_time?: string
+          id?: string
+          lunch_time?: string
+          meal_reminders_enabled?: boolean
+          motivation_notifications_enabled?: boolean
+          push_enabled?: boolean
+          push_token?: string | null
+          snack_time?: string | null
+          updated_at?: string
+          user_id: string
+          water_reminder_end?: string
+          water_reminder_frequency?: number
+          water_reminder_start?: string
+          water_reminders_enabled?: boolean
+        }
+        Update: {
+          achievement_notifications_enabled?: boolean
+          breakfast_time?: string
+          created_at?: string
+          daily_stats_enabled?: boolean
+          daily_stats_time?: string
+          device_platform?: string | null
+          dinner_time?: string
+          id?: string
+          lunch_time?: string
+          meal_reminders_enabled?: boolean
+          motivation_notifications_enabled?: boolean
+          push_enabled?: boolean
+          push_token?: string | null
+          snack_time?: string | null
+          updated_at?: string
+          user_id?: string
+          water_reminder_end?: string
+          water_reminder_frequency?: number
+          water_reminder_start?: string
+          water_reminders_enabled?: boolean
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           activity_level: string | null
