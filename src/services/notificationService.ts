@@ -1,7 +1,33 @@
-import { LocalNotifications } from '@capacitor/local-notifications';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { isNativePlatform, getPlatform } from '@/utils/platform';
 import { supabase } from '@/integrations/supabase/client';
+
+// Динамически загружаем плагины только когда нужно
+let LocalNotificationsModule: any = null;
+let PushNotificationsModule: any = null;
+
+async function loadNotificationPlugins() {
+  if (!isNativePlatform()) return { LocalNotifications: null, PushNotifications: null };
+  
+  try {
+    if (!LocalNotificationsModule) {
+      const localModule = await import('@capacitor/local-notifications');
+      LocalNotificationsModule = localModule.LocalNotifications;
+    }
+    
+    if (!PushNotificationsModule) {
+      const pushModule = await import('@capacitor/push-notifications');
+      PushNotificationsModule = pushModule.PushNotifications;
+    }
+    
+    return {
+      LocalNotifications: LocalNotificationsModule,
+      PushNotifications: PushNotificationsModule
+    };
+  } catch (error) {
+    console.error('Failed to load notification plugins:', error);
+    return { LocalNotifications: null, PushNotifications: null };
+  }
+}
 
 export interface NotificationSettings {
   push_enabled: boolean;
@@ -29,6 +55,9 @@ class NotificationService {
     if (!isNativePlatform() || this.isInitialized) return;
 
     try {
+      const { LocalNotifications, PushNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications || !PushNotifications) return;
+
       // Запрашиваем разрешения на уведомления
       const permResult = await LocalNotifications.requestPermissions();
       if (permResult.display !== 'granted') {
@@ -42,18 +71,18 @@ class NotificationService {
         await PushNotifications.register();
         
         // Слушаем регистрацию токена
-        PushNotifications.addListener('registration', async (token) => {
+        PushNotifications.addListener('registration', async (token: any) => {
           console.log('Push token:', token.value);
           await this.savePushToken(token.value);
         });
 
         // Слушаем ошибки регистрации
-        PushNotifications.addListener('registrationError', (error) => {
+        PushNotifications.addListener('registrationError', (error: any) => {
           console.error('Push registration error:', error);
         });
 
         // Слушаем получение push-уведомлений
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        PushNotifications.addListener('pushNotificationReceived', (notification: any) => {
           console.log('Push notification received:', notification);
         });
       }
@@ -86,6 +115,9 @@ class NotificationService {
     if (!isNativePlatform()) return;
 
     try {
+      const { LocalNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications) return;
+
       // Отменяем все существующие уведомления
       await LocalNotifications.cancel({ notifications: await this.getPendingNotifications() });
 
@@ -241,6 +273,9 @@ class NotificationService {
 
   private async getPendingNotifications() {
     try {
+      const { LocalNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications) return [];
+      
       const result = await LocalNotifications.getPending();
       return result.notifications;
     } catch (error) {
@@ -253,6 +288,9 @@ class NotificationService {
     if (!isNativePlatform()) return;
 
     try {
+      const { LocalNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications) return;
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -283,6 +321,9 @@ class NotificationService {
     if (!isNativePlatform()) return;
 
     try {
+      const { LocalNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications) return;
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -313,6 +354,9 @@ class NotificationService {
     if (!isNativePlatform()) return;
 
     try {
+      const { LocalNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications) return;
+
       const pending = await this.getPendingNotifications();
       if (pending.length > 0) {
         await LocalNotifications.cancel({ notifications: pending });

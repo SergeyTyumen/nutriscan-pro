@@ -4,15 +4,23 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/utils/platform';
 
-// Capacitor Speech Recognition
-let SpeechRecognition: any = null;
-if (isNativePlatform()) {
-  import('@capacitor-community/speech-recognition').then(module => {
-    SpeechRecognition = module.SpeechRecognition;
-  });
-}
-
 type VitaState = 'idle' | 'listening' | 'processing' | 'speaking';
+
+// Динамически загружаем SpeechRecognition только когда нужно
+let SpeechRecognitionModule: any = null;
+
+async function loadSpeechRecognition() {
+  if (!isNativePlatform() || SpeechRecognitionModule) return SpeechRecognitionModule;
+  
+  try {
+    const module = await import('@capacitor-community/speech-recognition');
+    SpeechRecognitionModule = module.SpeechRecognition;
+    return SpeechRecognitionModule;
+  } catch (error) {
+    console.error('Failed to load speech recognition:', error);
+    return null;
+  }
+}
 
 export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
@@ -23,10 +31,13 @@ export const VitaButton = () => {
 
   // Инициализация для нативной платформы
   useEffect(() => {
-    if (!isNativePlatform() || !SpeechRecognition) return;
+    if (!isNativePlatform()) return;
 
     const initNativeSpeechRecognition = async () => {
       try {
+        const SpeechRecognition = await loadSpeechRecognition();
+        if (!SpeechRecognition) return;
+
         // Запрашиваем разрешения
         const { available } = await SpeechRecognition.available();
         if (!available) {
@@ -55,9 +66,12 @@ export const VitaButton = () => {
   }, []);
 
   const startWakeWordDetection = async () => {
-    if (!isNativePlatform() || !SpeechRecognition || recognitionActiveRef.current) return;
+    if (!isNativePlatform() || recognitionActiveRef.current) return;
 
     try {
+      const SpeechRecognition = await loadSpeechRecognition();
+      if (!SpeechRecognition) return;
+
       recognitionActiveRef.current = true;
 
       // Слушатель для частичных результатов
@@ -92,9 +106,12 @@ export const VitaButton = () => {
   };
 
   const stopWakeWordDetection = async () => {
-    if (!isNativePlatform() || !SpeechRecognition || !recognitionActiveRef.current) return;
+    if (!isNativePlatform() || !recognitionActiveRef.current) return;
 
     try {
+      const SpeechRecognition = await loadSpeechRecognition();
+      if (!SpeechRecognition) return;
+
       await SpeechRecognition.stop();
       SpeechRecognition.removeAllListeners();
       recognitionActiveRef.current = false;
