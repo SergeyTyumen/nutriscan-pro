@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, Send, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
+import { Mic, Send, Image as ImageIcon, Loader2, Plus, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,7 +59,9 @@ const Assistant = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>('');
   const [currentFoodData, setCurrentFoodData] = useState<FoodAnalysis | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState<number | null>(null); // Index of message being spoken
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -407,6 +409,80 @@ const Assistant = () => {
     reader.readAsDataURL(file);
   };
 
+  const speakText = async (text: string, messageIndex: number) => {
+    try {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+
+      setIsSpeaking(messageIndex);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text, voice: 'alena' }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to generate speech');
+      }
+
+      const { audioContent } = await response.json();
+      
+      // Convert base64 to audio and play
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(audioContent), c => c.charCodeAt(0))],
+        { type: 'audio/mp3' }
+      );
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setIsSpeaking(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setIsSpeaking(null);
+        URL.revokeObjectURL(audioUrl);
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось воспроизвести аудио',
+          variant: 'destructive'
+        });
+      };
+
+      await audio.play();
+
+    } catch (error) {
+      console.error('TTS error:', error);
+      setIsSpeaking(null);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось озвучить текст',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const stopSpeaking = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsSpeaking(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted pb-20">
       <div className="container mx-auto px-4 py-6">
@@ -423,21 +499,41 @@ const Assistant = () => {
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div className="flex flex-col gap-2">
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
-                      }`}
-                    >
-                      {message.image && (
-                        <img 
-                          src={message.image} 
-                          alt="Uploaded" 
-                          className="max-w-full rounded-lg mb-2"
-                        />
+                    <div className="flex items-start gap-2">
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                          message.role === 'user'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        {message.image && (
+                          <img 
+                            src={message.image} 
+                            alt="Uploaded" 
+                            className="max-w-full rounded-lg mb-2"
+                          />
+                        )}
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                      
+                      {message.role === 'assistant' && message.content && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => {
+                            if (isSpeaking === index) {
+                              stopSpeaking();
+                            } else {
+                              speakText(message.content, index);
+                            }
+                          }}
+                          disabled={isSpeaking !== null && isSpeaking !== index}
+                        >
+                          <Volume2 className={`w-4 h-4 ${isSpeaking === index ? 'text-primary animate-pulse' : ''}`} />
+                        </Button>
                       )}
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     </div>
                     
                     {message.actions && message.actions.length > 0 && (
