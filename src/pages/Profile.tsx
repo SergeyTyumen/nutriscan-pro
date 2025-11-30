@@ -23,19 +23,22 @@ const Profile = () => {
   const { theme, setTheme } = useTheme();
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, error: profileError } = useQuery({
     queryKey: ['profile-edit', user?.id],
     queryFn: async () => {
+      if (!user?.id) throw new Error('User not authenticated');
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
 
       if (error) throw error;
       return data;
     },
     enabled: !!user?.id,
+    retry: 2,
   });
 
   const [formData, setFormData] = useState({
@@ -114,10 +117,32 @@ const Profile = () => {
     updateProfile.mutate(formData);
   };
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Необходима авторизация</p>
+          <Button onClick={() => navigate('/auth')}>Войти</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">Ошибка загрузки профиля</p>
+          <Button onClick={() => navigate('/')}>На главную</Button>
+        </div>
       </div>
     );
   }

@@ -76,6 +76,15 @@ const Assistant = () => {
   }, [messages]);
 
   const streamChat = async (userMessage: string, image?: string) => {
+    if (!user) {
+      toast({
+        title: 'Ошибка',
+        description: 'Необходима авторизация',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     const newUserMessage: Message = { 
@@ -86,71 +95,37 @@ const Assistant = () => {
     setMessages(prev => [...prev, newUserMessage]);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [...messages, newUserMessage].map(m => ({
-              role: m.role,
-              content: m.content
-            })),
-            ...(image && { image })
-          }),
+      const { data: response, error: invokeError } = await supabase.functions.invoke('ai-assistant', {
+        body: {
+          messages: [...messages, newUserMessage].map(m => ({
+            role: m.role,
+            content: m.content
+          })),
+          ...(image && { image }),
+          stream: true
         }
-      );
+      });
 
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to start stream');
+      if (invokeError) {
+        throw invokeError;
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = '';
-      let assistantContent = '';
+      if (!response) {
+        throw new Error('No response received');
+      }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantContent += content;
-              setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1] = {
-                  role: 'assistant',
-                  content: assistantContent
-                };
-                return newMessages;
-              });
-            }
-          } catch (e) {
-            console.error('Parse error:', e);
-          }
-        }
+      // Для streaming ответа
+      if (response.response) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: response.response
+        }]);
+      } else {
+        // Fallback если нет ответа
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Не удалось получить ответ'
+        }]);
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -167,35 +142,38 @@ const Assistant = () => {
   };
 
   const analyzeFoodImage = async (image: string) => {
+    if (!user) {
+      toast({
+        title: 'Ошибка',
+        description: 'Необходима авторизация',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: 'user',
-                content: 'Проанализируй эту еду и определи продукты с калориями и БЖУ'
-              }
-            ],
-            image,
-            analyzeFood: true
-          }),
+      const { data: foodData, error } = await supabase.functions.invoke('ai-assistant', {
+        body: {
+          messages: [
+            {
+              role: 'user',
+              content: 'Проанализируй эту еду и определи продукты с калориями и БЖУ'
+            }
+          ],
+          image,
+          analyzeFood: true
         }
-      );
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze food');
+      if (error) {
+        throw error;
       }
 
-      const foodData: FoodAnalysis = await response.json();
+      if (!foodData) {
+        throw new Error('No food data received');
+      }
       
       const totalCalories = foodData.foods.reduce((sum, f) => sum + f.calories, 0);
       const totalProtein = foodData.foods.reduce((sum, f) => sum + f.protein, 0);
@@ -367,24 +345,19 @@ const Assistant = () => {
       reader.onloadend = async () => {
         const base64Audio = reader.result?.toString().split(',')[1];
         
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/voice-to-text`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ audio: base64Audio }),
-          }
-        );
+        const { data, error } = await supabase.functions.invoke('voice-to-text', {
+          body: { audio: base64Audio }
+        });
 
-        if (!response.ok) {
-          throw new Error('Transcription failed');
+        if (error) {
+          throw error;
         }
 
-        const { text } = await response.json();
-        setInput(text);
+        if (!data?.text) {
+          throw new Error('No transcription text received');
+        }
+
+        setInput(data.text);
         setIsLoading(false);
       };
     } catch (error) {
@@ -419,23 +392,19 @@ const Assistant = () => {
 
       setIsSpeaking(messageIndex);
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ text, voice: 'alena' }),
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('text-to-speech', {
+        body: { text, voice: 'alena' }
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate speech');
+      if (error) {
+        throw error;
       }
 
-      const { audioContent } = await response.json();
+      if (!data?.audioContent) {
+        throw new Error('No audio content received');
+      }
+
+      const audioContent = data.audioContent;
       
       // Convert base64 to audio and play
       const audioBlob = new Blob(
