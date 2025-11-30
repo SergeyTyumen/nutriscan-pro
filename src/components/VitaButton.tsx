@@ -123,6 +123,13 @@ export const VitaButton = () => {
 
   const startListening = async () => {
     try {
+      console.log('[VITA] Начинаем прослушивание');
+      
+      toast({
+        title: "Слушаю",
+        description: "Говорите...",
+      });
+      
       setState('listening');
       
       // На нативной платформе используем SpeechRecognition
@@ -138,8 +145,9 @@ export const VitaButton = () => {
         // Слушатель для результатов
         const resultListener = SpeechRecognition.addListener('partialResults', async (data: any) => {
           const text = data.matches?.[0] || '';
+          console.log('[VITA] Частичный результат:', text);
           if (text) {
-            console.log('Recognized text:', text);
+            console.log('[VITA] Распознан текст:', text);
             // Останавливаем распознавание
             await SpeechRecognition.stop();
             SpeechRecognition.removeAllListeners();
@@ -220,8 +228,17 @@ export const VitaButton = () => {
 
   const processVoiceCommand = async (text: string) => {
     try {
+      console.log('[VITA] Начинаем обработку команды:', text);
+      
+      toast({
+        title: "Обрабатываю команду",
+        description: `"${text}"`,
+      });
+      
       setState('processing');
 
+      console.log('[VITA] Отправляем запрос в ai-assistant...');
+      
       // Отправляем в AI ассистента
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
         body: { 
@@ -231,16 +248,34 @@ export const VitaButton = () => {
         }
       });
 
+      console.log('[VITA] Ответ от ai-assistant:', { aiResponse, aiError });
+
       if (aiError) {
-        console.error('AI error:', aiError);
+        console.error('[VITA] AI error:', aiError);
+        toast({
+          title: "Ошибка AI",
+          description: aiError.message || 'Сервер недоступен',
+          variant: "destructive"
+        });
         throw new Error('Failed to get AI response');
       }
 
       if (!aiResponse) {
+        console.error('[VITA] No AI response');
+        toast({
+          title: "Нет ответа",
+          description: "AI не вернул ответ",
+          variant: "destructive"
+        });
         throw new Error('No AI response received');
       }
 
-      console.log('AI response:', aiResponse);
+      console.log('[VITA] AI response успешно получен:', aiResponse);
+      
+      toast({
+        title: "Озвучиваю ответ",
+        description: "Готово!",
+      });
 
       // Озвучиваем ответ
       setState('speaking');
@@ -386,13 +421,25 @@ export const VitaButton = () => {
 
   const speakResponse = async (text: string) => {
     try {
+      console.log('[VITA] Запрос озвучки:', text);
+      
       const { data: audioData, error: audioError } = await supabase.functions.invoke('text-to-speech', {
         body: { text, voice: 'alena' }
       });
 
+      console.log('[VITA] Ответ text-to-speech:', { audioData, audioError });
+
       if (audioError || !audioData?.audioContent) {
+        console.error('[VITA] Text-to-speech error:', audioError);
+        toast({
+          title: "Ошибка озвучки",
+          description: audioError?.message || 'Сервер недоступен',
+          variant: "destructive"
+        });
         throw new Error('Failed to generate speech');
       }
+
+      console.log('[VITA] Аудио получено, воспроизводим');
 
       // Воспроизводим аудио
       const audio = new Audio(`data:audio/mp3;base64,${audioData.audioContent}`);
