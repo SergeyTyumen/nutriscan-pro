@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { AvatarPicker } from '@/components/AvatarPicker';
+import { NotificationSettings } from '@/components/NotificationSettings';
 import { useTheme } from '@/components/ThemeProvider';
 
 const Profile = () => {
@@ -162,7 +164,14 @@ const Profile = () => {
           <h1 className="text-2xl font-bold text-foreground">Профиль</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="profile">Профиль</TabsTrigger>
+            <TabsTrigger value="notifications">Уведомления</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
           <Card className="bg-card p-6 shadow-md border-border">
             <div className="flex items-center gap-2 mb-4">
               <Palette className="h-5 w-5 text-primary" />
@@ -414,7 +423,13 @@ const Profile = () => {
               Выйти
             </Button>
           </div>
-        </form>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <NotificationSettings />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
