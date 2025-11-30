@@ -8,6 +8,7 @@ import { WaterWidget } from '@/components/WaterWidget';
 import { StreakWidget } from '@/components/StreakWidget';
 import { MealsList } from '@/components/MealsList';
 import { FoodSearchDialog } from '@/components/FoodSearchDialog';
+import { VitaButton } from '@/components/VitaButton';
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -28,14 +29,18 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={signOut}
-            variant="ghost"
-            size="icon"
-            className="rounded-2xl"
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
+          
+          <div className="flex items-center gap-3">
+            <VitaButton />
+            <Button
+              onClick={signOut}
+              variant="ghost"
+              size="icon"
+              className="rounded-2xl"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-4">
