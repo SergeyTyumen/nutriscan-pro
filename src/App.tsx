@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Camera from "./pages/Camera";
 import Stats from "./pages/Stats";
 import Profile from "./pages/Profile";
+import Recipes from "./pages/Recipes";
 import MealDetail from "./pages/MealDetail";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const AppContent = () => {
         <Route path="/auth" element={<Auth />} />
         <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
         <Route path="/camera" element={<ProtectedRoute><Camera /></ProtectedRoute>} />
+        <Route path="/recipes" element={<ProtectedRoute><Recipes /></ProtectedRoute>} />
         <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/meal/:mealId" element={<ProtectedRoute><MealDetail /></ProtectedRoute>} />
