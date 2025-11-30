@@ -1,28 +1,34 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
+import { CaloriesWidget } from '@/components/CaloriesWidget';
+import { MacrosWidget } from '@/components/MacrosWidget';
+import { WaterWidget } from '@/components/WaterWidget';
+import { StreakWidget } from '@/components/StreakWidget';
+import { MealsList } from '@/components/MealsList';
+import { BottomNav } from '@/components/BottomNav';
 
 const Index = () => {
   const { user, signOut } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-muted">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted pb-20">
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-md">
               <span className="text-2xl">🍎</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Calorie Tracker AI</h1>
+              <h1 className="text-xl font-bold text-foreground">Привет!</h1>
               <p className="text-sm text-muted-foreground">
-                Привет, {user?.user_metadata?.display_name || user?.email?.split('@')[0]}!
+                {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
               </p>
             </div>
           </div>
           <Button
             onClick={signOut}
-            variant="outline"
+            variant="ghost"
             size="icon"
             className="rounded-2xl"
           >
@@ -30,42 +36,24 @@ const Index = () => {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div className="bg-card rounded-3xl p-6 shadow-soft">
-            <h2 className="text-lg font-semibold mb-2">База данных готова!</h2>
-            <p className="text-muted-foreground">
-              Профили, приёмы пищи, референсы, рецепты, достижения — всё настроено.
-            </p>
+        <div className="space-y-4">
+          <CaloriesWidget />
+          
+          <MacrosWidget />
+          
+          <div className="grid grid-cols-1 gap-4">
+            <WaterWidget />
+            <StreakWidget />
           </div>
 
-          <div className="bg-card rounded-3xl p-6 shadow-soft">
-            <h2 className="text-lg font-semibold mb-2">Авторизация работает</h2>
-            <p className="text-muted-foreground">
-              Email автоподтверждается, профили создаются автоматически.
-            </p>
+          <div className="pt-2">
+            <h2 className="text-lg font-semibold text-foreground mb-3">Сегодня</h2>
+            <MealsList />
           </div>
-
-          <div className="bg-card rounded-3xl p-6 shadow-soft">
-            <h2 className="text-lg font-semibold mb-2">OpenAI готов</h2>
-            <p className="text-muted-foreground">
-              API ключ настроен, готово к распознаванию еды через GPT-4o Vision.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 bg-card rounded-3xl p-8 shadow-md">
-          <h2 className="text-xl font-bold mb-4">Что дальше?</h2>
-          <p className="text-muted-foreground mb-4">
-            Этап 1 (Фундамент) завершён! Теперь можно переходить к:
-          </p>
-          <ul className="space-y-2 text-muted-foreground">
-            <li>• Этап 2: Дизайн-система с градиентами (в стиле Яндекс.Пэй)</li>
-            <li>• Этап 3: Главный экран с калориями, водой, стриком</li>
-            <li>• Этап 4: Камера и AI распознавание еды (GPT-4o Vision)</li>
-            <li>• Этап 5: Голосовой ассистент</li>
-          </ul>
         </div>
       </div>
+
+      <BottomNav />
     </div>
   );
 };
