@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Camera from "./pages/Camera";
 import Stats from "./pages/Stats";
 import Profile from "./pages/Profile";
+import MealDetail from "./pages/MealDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const AppContent = () => {
         <Route path="/camera" element={<ProtectedRoute><Camera /></ProtectedRoute>} />
         <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/meal/:mealId" element={<ProtectedRoute><MealDetail /></ProtectedRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
