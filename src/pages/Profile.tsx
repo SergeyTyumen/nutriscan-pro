@@ -3,18 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Moon, Sun, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { AvatarPicker } from '@/components/AvatarPicker';
+import { useTheme } from '@/components/ThemeProvider';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
+  const { theme, setTheme } = useTheme();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile-edit', user?.id],
@@ -32,6 +36,7 @@ const Profile = () => {
   });
 
   const [formData, setFormData] = useState({
+    avatar_url: '',
     display_name: '',
     age: '',
     gender: '',
@@ -50,6 +55,7 @@ const Profile = () => {
   useEffect(() => {
     if (profile) {
       setFormData({
+        avatar_url: profile.avatar_url || '🍎',
         display_name: profile.display_name || '',
         age: profile.age?.toString() || '',
         gender: profile.gender || '',
@@ -71,6 +77,7 @@ const Profile = () => {
       const { error } = await supabase
         .from('profiles')
         .update({
+          avatar_url: data.avatar_url || null,
           display_name: data.display_name || null,
           age: data.age ? Number(data.age) : null,
           gender: data.gender || null,
@@ -128,6 +135,42 @@ const Profile = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <Card className="bg-card p-6 shadow-md border-border">
+            <div className="flex items-center gap-2 mb-4">
+              <Palette className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-lg">Внешний вид</h3>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <Label className="mb-3 block">Аватар</Label>
+                <AvatarPicker
+                  selectedAvatar={formData.avatar_url}
+                  onSelect={(avatar) => setFormData({ ...formData, avatar_url: avatar })}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
+                <div className="flex items-center gap-3">
+                  {theme === 'dark' ? (
+                    <Moon className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Sun className="h-5 w-5 text-primary" />
+                  )}
+                  <div>
+                    <Label>Тёмная тема</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {theme === 'dark' ? 'Включена' : 'Выключена'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={theme === 'dark'}
+                  onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                />
+              </div>
+            </div>
+          </Card>
+
           <Card className="bg-card p-6 shadow-md border-border">
             <h3 className="font-semibold text-lg mb-4">Личные данные</h3>
             <div className="space-y-4">
