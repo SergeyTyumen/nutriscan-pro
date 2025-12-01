@@ -52,27 +52,45 @@ class NotificationService {
   private isInitialized = false;
 
   async initialize() {
-    if (!isNativePlatform() || this.isInitialized) return;
+    if (!isNativePlatform()) {
+      console.log('Not on native platform, skipping notification initialization');
+      return;
+    }
+
+    if (this.isInitialized) {
+      console.log('Notification service already initialized');
+      return;
+    }
 
     try {
       const { LocalNotifications, PushNotifications } = await loadNotificationPlugins();
-      if (!LocalNotifications || !PushNotifications) return;
+      if (!LocalNotifications || !PushNotifications) {
+        console.error('Failed to load notification plugins');
+        return;
+      }
 
       // Запрашиваем разрешения на уведомления
+      console.log('Requesting local notification permissions...');
       const permResult = await LocalNotifications.requestPermissions();
+      console.log('Local notification permissions result:', permResult);
+      
       if (permResult.display !== 'granted') {
         console.warn('Local notifications permission denied');
         return;
       }
 
       // Запрашиваем разрешения на push-уведомления
+      console.log('Requesting push notification permissions...');
       const pushPermResult = await PushNotifications.requestPermissions();
+      console.log('Push notification permissions result:', pushPermResult);
+      
       if (pushPermResult.receive === 'granted') {
+        console.log('Registering for push notifications...');
         await PushNotifications.register();
         
         // Слушаем регистрацию токена
         PushNotifications.addListener('registration', async (token: any) => {
-          console.log('Push token:', token.value);
+          console.log('Push token registered:', token.value);
           await this.savePushToken(token.value);
         });
 
@@ -88,9 +106,31 @@ class NotificationService {
       }
 
       this.isInitialized = true;
-      console.log('Notification service initialized');
+      console.log('✅ Notification service fully initialized');
     } catch (error) {
-      console.error('Failed to initialize notifications:', error);
+      console.error('❌ Failed to initialize notifications:', error);
+    }
+  }
+
+  async checkPermissions() {
+    if (!isNativePlatform()) return { local: 'denied', push: 'denied' };
+
+    try {
+      const { LocalNotifications, PushNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications || !PushNotifications) {
+        return { local: 'denied', push: 'denied' };
+      }
+
+      const localPerm = await LocalNotifications.checkPermissions();
+      const pushPerm = await PushNotifications.checkPermissions();
+
+      return {
+        local: localPerm.display,
+        push: pushPerm.receive
+      };
+    } catch (error) {
+      console.error('Failed to check permissions:', error);
+      return { local: 'denied', push: 'denied' };
     }
   }
 
@@ -112,14 +152,34 @@ class NotificationService {
   }
 
   async scheduleNotifications(settings: NotificationSettings, userId: string) {
-    if (!isNativePlatform()) return;
+    if (!isNativePlatform()) {
+      console.log('Not on native platform, skipping notification scheduling');
+      return;
+    }
 
     try {
+      console.log('📅 Starting notification scheduling...');
       const { LocalNotifications } = await loadNotificationPlugins();
-      if (!LocalNotifications) return;
+      if (!LocalNotifications) {
+        console.error('LocalNotifications plugin not available');
+        return;
+      }
+
+      // Проверяем разрешения
+      const permissions = await this.checkPermissions();
+      console.log('Current permissions:', permissions);
+      
+      if (permissions.local !== 'granted') {
+        console.warn('⚠️ Local notifications permission not granted');
+        return;
+      }
 
       // Отменяем все существующие уведомления
-      await LocalNotifications.cancel({ notifications: await this.getPendingNotifications() });
+      const pending = await this.getPendingNotifications();
+      console.log(`Cancelling ${pending.length} existing notifications`);
+      if (pending.length > 0) {
+        await LocalNotifications.cancel({ notifications: pending });
+      }
 
       const notifications: any[] = [];
       let notificationId = 1;
@@ -182,22 +242,46 @@ class NotificationService {
 
       // Планируем все уведомления
       if (notifications.length > 0) {
+        console.log(`Scheduling ${notifications.length} notifications...`);
         await LocalNotifications.schedule({ notifications });
-        console.log(`Scheduled ${notifications.length} notifications`);
+        
+        // Логируем каждое уведомление
+        notifications.forEach(notif => {
+          const scheduleDate = notif.schedule?.at;
+          console.log(`✅ Scheduled: "${notif.title}" at ${scheduleDate?.toLocaleString('ru-RU')}`);
+        });
+        
+        // Проверяем что они действительно запланированы
+        const pendingAfter = await this.getPendingNotifications();
+        console.log(`📊 Total pending notifications after scheduling: ${pendingAfter.length}`);
+      } else {
+        console.log('No notifications to schedule');
       }
     } catch (error) {
-      console.error('Failed to schedule notifications:', error);
+      console.error('❌ Failed to schedule notifications:', error);
     }
   }
 
+  // Публичный метод для проверки запланированных уведомлений
+  async getScheduledNotifications() {
+    return this.getPendingNotifications();
+  }
+
   private createMealNotification(id: number, title: string, body: string, time: string) {
-    const [hours, minutes] = time.split(':').map(Number);
+    // Убираем секунды если они есть (HH:MM:SS -> HH:MM)
+    const timeWithoutSeconds = time.substring(0, 5);
+    const [hours, minutes] = timeWithoutSeconds.split(':').map(Number);
+    
     const schedule = new Date();
     schedule.setHours(hours, minutes, 0, 0);
 
     // Если время уже прошло сегодня, планируем на завтра
-    if (schedule < new Date()) {
+    const now = new Date();
+    if (schedule < now) {
       schedule.setDate(schedule.getDate() + 1);
+      console.log(`⏰ ${title}: время ${timeWithoutSeconds} уже прошло, планируем на завтра`);
+    } else {
+      console.log(`⏰ ${title}: планируем на сегодня в ${timeWithoutSeconds}`);
     }
 
     return {
@@ -217,8 +301,11 @@ class NotificationService {
     frequencyMinutes: number
   ) {
     const notifications: any[] = [];
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    // Убираем секунды если они есть
+    const startTimeClean = startTime.substring(0, 5);
+    const endTimeClean = endTime.substring(0, 5);
+    const [startHours, startMinutes] = startTimeClean.split(':').map(Number);
+    const [endHours, endMinutes] = endTimeClean.split(':').map(Number);
 
     const startMinutesTotal = startHours * 60 + startMinutes;
     const endMinutesTotal = endHours * 60 + endMinutes;
@@ -253,7 +340,9 @@ class NotificationService {
   }
 
   private createDailyStatsNotification(id: number, time: string) {
-    const [hours, minutes] = time.split(':').map(Number);
+    // Убираем секунды если они есть
+    const timeClean = time.substring(0, 5);
+    const [hours, minutes] = timeClean.split(':').map(Number);
     const schedule = new Date();
     schedule.setHours(hours, minutes, 0, 0);
 
