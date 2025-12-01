@@ -25,7 +25,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, image, analyzeFood } = await req.json();
+    const { messages, image, analyzeFood, userContext } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const authHeader = req.headers.get('Authorization');
     const supabase = getSupabaseClient(authHeader);
@@ -38,52 +38,32 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id;
 
-    const systemPrompt = `Ты - персональный диет-коуч пользователя. Твоя задача - помогать достигать целей по питанию и здоровью.
+    // Build context string if available
+    let contextString = '';
+    if (userContext) {
+      contextString = `\n\nТЕКУЩИЙ СТАТУС ПОЛЬЗОВАТЕЛЯ (сегодня):
+- Калории: ${userContext.calories?.consumed || 0} / ${userContext.calories?.goal || 2000} ккал
+- Белки: ${userContext.protein?.consumed || 0} / ${userContext.protein?.goal || 150} г
+- Жиры: ${userContext.fat?.consumed || 0} / ${userContext.fat?.goal || 65} г
+- Углеводы: ${userContext.carbs?.consumed || 0} / ${userContext.carbs?.goal || 250} г
+- Вода: ${userContext.water?.consumed || 0} / ${userContext.water?.goal || 2000} мл
+- Приёмов пищи: ${userContext.mealsCount || 0}
 
-ТВОЯ РОЛЬ И СПЕЦИАЛИЗАЦИЯ:
-- Ты эксперт по питанию, здоровому образу жизни и мотивации
-- Помогаешь достигать целей (похудение, набор массы, здоровое питание)
-- Даёшь персональные рекомендации на основе данных пользователя
-- Поддерживаешь мотивацию и помогаешь формировать полезные привычки
+Используй эту информацию для ответов. Не нужен tool get_today_stats если спрашивают про сегодня.`;
+    }
 
-ЧТО ТЫ ДЕЛАЕШЬ:
-✓ Анализируешь питание и даёшь рекомендации
-✓ Отслеживаешь прогресс и мотивируешь
-✓ Составляешь планы питания на день
-✓ Помогаешь с выбором продуктов и рецептов
-✓ Отвечаешь на вопросы о калориях, БЖУ, нутриентах
-✓ Даёшь советы по режиму и здоровым привычкам
+    const systemPrompt = `Ты - персональный диет-коуч. Помогаешь с питанием и здоровьем.${contextString}
 
-ЧТО ТЫ НЕ ДЕЛАЕШЬ:
-✗ Не отвечаешь на вопросы не связанные с питанием и здоровьем
-✗ Не даёшь медицинских диагнозов (рекомендуешь врача)
-✗ Не обсуждаешь финансы, политику, программирование и т.д.
 
-ВАЖНО: У тебя есть инструменты для автоматического выполнения действий:
-- add_meal: добавить еду в дневник питания
-- add_water: добавить воду в дневник
-- get_today_stats: получить статистику за сегодня
-- get_week_stats: получить статистику за неделю
-- search_food: найти продукт в базе данных
-- ask_clarification: задать уточняющий вопрос, если нужна дополнительная информация
+ИНСТРУМЕНТЫ:
+- add_meal: добавить еду в дневник
+- add_water: добавить воду
+- get_today_stats: статистика за сегодня (используй только если нет контекста выше)
+- get_week_stats: статистика за неделю
+- search_food: найти продукт в базе
+- ask_clarification: уточнить если не хватает данных
 
-Когда пользователь просит добавить еду/воду или получить статистику - ВСЕГДА используй соответствующий инструмент.
-Если не хватает данных (например, не указано количество) - используй ask_clarification.
-
-Примеры:
-- "Добавь яблоко" → ask_clarification (сколько грамм?)
-- "Добавь 2 яйца на завтрак" → add_meal
-- "Добавь стакан воды" → add_water (250 мл)
-- "Сколько я съел сегодня?" → get_today_stats
-- "Мой прогресс за неделю" → get_week_stats
-- "Что не так с финансами?" → "Я специализируюсь на вопросах питания и здоровья. Могу помочь с целями по питанию?"
-
-Стиль общения:
-- Дружелюбный и поддерживающий
-- Краткие и практичные ответы
-- Персонализированные рекомендации
-- Позитивная мотивация без осуждения
-- Всегда на русском языке`;
+Используй tools когда нужно выполнить действие. Отвечай кратко и дружелюбно.`;
 
 
     const messagesWithSystem = [
@@ -328,7 +308,8 @@ serve(async (req) => {
 
               result = { 
                 success: true, 
-                message: `Добавлено: ${args.food_name} (${args.quantity}г) в ${args.meal_type}. ${args.calories} ккал.`
+                message: `Добавлено: ${args.food_name} (${args.quantity}г) в ${args.meal_type}. ${args.calories} ккал.`,
+                skipFollowUp: true // Simple action, no need for second AI call
               };
               break;
 
@@ -348,7 +329,8 @@ serve(async (req) => {
 
               result = { 
                 success: true, 
-                message: `Добавлено ${args.amount_ml} мл воды ✓`
+                message: `Добавлено ${args.amount_ml} мл воды ✓`,
+                skipFollowUp: true // Simple action, no need for second AI call
               };
               break;
 
@@ -502,6 +484,34 @@ serve(async (req) => {
         if (analyzeResult) {
           const parsed = JSON.parse(analyzeResult.content);
           return new Response(JSON.stringify(parsed.foodData), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      // Check if all tools want to skip follow-up (simple actions)
+      const allSkipFollowUp = toolResults.every(r => {
+        try {
+          const parsed = JSON.parse(r.content);
+          return parsed.skipFollowUp === true;
+        } catch {
+          return false;
+        }
+      });
+
+      // For simple actions (add_water, add_meal), return message directly
+      if (allSkipFollowUp && toolResults.length > 0) {
+        const messages = toolResults.map(r => {
+          try {
+            const parsed = JSON.parse(r.content);
+            return parsed.message;
+          } catch {
+            return null;
+          }
+        }).filter(Boolean);
+
+        if (messages.length > 0) {
+          return new Response(JSON.stringify({ response: messages.join('\n') }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }

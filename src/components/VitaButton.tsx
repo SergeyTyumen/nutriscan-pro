@@ -3,6 +3,7 @@ import { Mic, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { isNativePlatform } from '@/utils/platform';
+import { useQuery } from '@tanstack/react-query';
 
 type VitaState = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -28,6 +29,39 @@ export const VitaButton = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionActiveRef = useRef(false);
   const { toast } = useToast();
+
+  // Load today's stats for context
+  const { data: todayStats } = useQuery({
+    queryKey: ['vita-context'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const today = new Date().toISOString().split('T')[0];
+
+      const [mealsData, waterData, profileData] = await Promise.all([
+        supabase.from('meals').select('total_calories, total_protein, total_fat, total_carbs').eq('user_id', user.id).eq('meal_date', today),
+        supabase.from('water_log').select('amount_ml').eq('user_id', user.id).eq('log_date', today),
+        supabase.from('profiles').select('daily_calorie_goal, daily_protein_goal, daily_fat_goal, daily_carbs_goal, daily_water_goal').eq('id', user.id).single()
+      ]);
+
+      const calories = mealsData.data?.reduce((sum, m) => sum + m.total_calories, 0) || 0;
+      const protein = mealsData.data?.reduce((sum, m) => sum + m.total_protein, 0) || 0;
+      const fat = mealsData.data?.reduce((sum, m) => sum + m.total_fat, 0) || 0;
+      const carbs = mealsData.data?.reduce((sum, m) => sum + m.total_carbs, 0) || 0;
+      const water = waterData.data?.reduce((sum, w) => sum + w.amount_ml, 0) || 0;
+
+      return {
+        calories: { consumed: calories, goal: profileData.data?.daily_calorie_goal || 2000 },
+        protein: { consumed: Math.round(protein), goal: profileData.data?.daily_protein_goal || 150 },
+        fat: { consumed: Math.round(fat), goal: profileData.data?.daily_fat_goal || 65 },
+        carbs: { consumed: Math.round(carbs), goal: profileData.data?.daily_carbs_goal || 250 },
+        water: { consumed: water, goal: profileData.data?.daily_water_goal || 2000 },
+        mealsCount: mealsData.data?.length || 0
+      };
+    },
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
 
   // Инициализация для нативной платформы
   useEffect(() => {
@@ -239,12 +273,13 @@ export const VitaButton = () => {
 
       console.log('[VITA] Отправляем запрос в ai-assistant...');
       
-      // Отправляем в AI ассистента
+      // Отправляем в AI ассистента с контекстом
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
         body: { 
           messages: [
             { role: 'user', content: text }
-          ]
+          ],
+          userContext: todayStats
         }
       });
 
@@ -346,12 +381,13 @@ export const VitaButton = () => {
 
           console.log('Transcribed text:', transcription.text);
 
-          // Отправляем в AI ассистента
+          // Отправляем в AI ассистента с контекстом
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
             body: { 
               messages: [
                 { role: 'user', content: transcription.text }
-              ]
+              ],
+              userContext: todayStats
             }
           });
 
