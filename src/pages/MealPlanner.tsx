@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, Loader2, ChevronRight, Check, Minus, Plus, RefreshCw } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -31,6 +32,13 @@ const steps = [
   { key: 'fruits', label: 'Фрукты', emoji: '🍎' },
   { key: 'review', label: 'Обзор', emoji: '✅' },
 ];
+
+const mealTypeConfig: Record<string, { label: string; short: string; color: string }> = {
+  breakfast: { label: 'Завтрак', short: 'З', color: 'bg-emerald-500' },
+  lunch: { label: 'Обед', short: 'О', color: 'bg-blue-500' },
+  dinner: { label: 'Ужин', short: 'У', color: 'bg-purple-500' },
+  snack: { label: 'Перекус', short: 'П', color: 'bg-orange-500' },
+};
 
 const MealPlanner = () => {
   const { user } = useAuth();
@@ -222,28 +230,32 @@ const MealPlanner = () => {
             Назад
           </Button>
 
-          <Card>
+          <Card className="border-0 shadow-lg">
             <CardHeader>
-              <CardTitle>Планировщик питания</CardTitle>
+              <CardTitle className="text-xl">Планировщик питания</CardTitle>
               <CardDescription>Выберите тип приёма пищи</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { key: 'breakfast', label: 'Завтрак', emoji: '🌅' },
-                { key: 'lunch', label: 'Обед', emoji: '☀️' },
-                { key: 'dinner', label: 'Ужин', emoji: '🌙' },
-                { key: 'snack', label: 'Перекус', emoji: '🍪' },
+                { key: 'breakfast', ...mealTypeConfig.breakfast },
+                { key: 'lunch', ...mealTypeConfig.lunch },
+                { key: 'dinner', ...mealTypeConfig.dinner },
+                { key: 'snack', ...mealTypeConfig.snack },
               ].map((type) => (
                 <Button
                   key={type.key}
                   variant="outline"
-                  className="w-full justify-start text-lg h-auto py-4"
+                  className="w-full justify-start text-base h-auto py-4 hover:shadow-sm transition-all"
                   onClick={() => {
                     setMealType(type.key);
                     setShowMealTypeSelection(false);
                   }}
                 >
-                  <span className="text-2xl mr-3">{type.emoji}</span>
+                  <Avatar className={`h-9 w-9 ${type.color} mr-3`}>
+                    <AvatarFallback className="bg-transparent text-white font-semibold">
+                      {type.short}
+                    </AvatarFallback>
+                  </Avatar>
                   {type.label}
                 </Button>
               ))}
