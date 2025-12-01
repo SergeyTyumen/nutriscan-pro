@@ -2,7 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Trash2, Loader2, BookmarkPlus } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, BookmarkPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -26,7 +25,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useState } from 'react';
 
@@ -36,6 +34,7 @@ const MealDetail = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeName, setRecipeName] = useState('');
 
   const { data: meal, isLoading: mealLoading } = useQuery({
@@ -214,6 +213,7 @@ const MealDetail = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted pb-20">
       <div className="container mx-auto px-4 py-6">
+        {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button
             variant="ghost"
@@ -229,75 +229,12 @@ const MealDetail = () => {
               {new Date(meal.meal_date).toLocaleDateString('ru-RU')} • {meal.meal_time}
             </p>
           </div>
-          <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="icon" className="rounded-2xl">
-                <BookmarkPlus className="h-5 w-5" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Сохранить как рецепт</DialogTitle>
-                <DialogDescription>
-                  Этот приём пищи будет сохранён для быстрого добавления
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="recipe-name">Название рецепта</Label>
-                  <Input
-                    id="recipe-name"
-                    value={recipeName}
-                    onChange={(e) => setRecipeName(e.target.value)}
-                    placeholder="Например: Мой любимый завтрак"
-                    className="mt-2"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
-                  Отмена
-                </Button>
-                <Button
-                  onClick={() => saveAsRecipe.mutate()}
-                  disabled={!recipeName.trim() || saveAsRecipe.isPending}
-                  className="bg-gradient-primary hover:opacity-90 text-white border-0"
-                >
-                  Сохранить
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="icon" className="rounded-2xl">
-                <Trash2 className="h-5 w-5" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Удалить приём пищи?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Это действие нельзя отменить. Весь приём пищи и все продукты в нём будут удалены.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteMeal.mutate()}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Удалить
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
 
         <div className="space-y-4">
+          {/* Main Info Card */}
           <Card className="bg-card p-6 shadow-md border-border">
-            <h3 className="font-semibold mb-3">Итого</h3>
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-gradient-primary text-white rounded-2xl p-4">
                 <p className="text-sm opacity-90 mb-1">Калории</p>
                 <p className="text-3xl font-bold">{meal.total_calories}</p>
@@ -318,20 +255,42 @@ const MealDetail = () => {
                 </div>
               </div>
             </div>
+            
             {meal.notes && (
-              <div className="bg-muted rounded-2xl p-3">
+              <div className="bg-muted rounded-2xl p-3 mb-4">
                 <p className="text-sm text-muted-foreground">{meal.notes}</p>
               </div>
             )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setSaveDialogOpen(true)}
+                variant="outline"
+                className="flex-1 gap-2"
+              >
+                <BookmarkPlus className="h-4 w-4" />
+                Сохранить как блюдо
+              </Button>
+              <Button
+                onClick={() => setDeleteDialogOpen(true)}
+                variant="outline"
+                className="flex-1 gap-2 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Удалить
+              </Button>
+            </div>
           </Card>
 
+          {/* Foods List */}
           <div>
             <h3 className="font-semibold mb-3 text-foreground">Продукты ({foods?.length || 0})</h3>
             <div className="space-y-3">
               {foods?.map((food) => (
                 <Card
                   key={food.id}
-                  className="bg-card p-4 shadow-md border-border hover:shadow-lg transition-shadow"
+                  className="bg-card p-4 shadow-md border-border"
                 >
                   <div className="flex gap-4">
                     {food.photo_url && (
@@ -342,52 +301,30 @@ const MealDetail = () => {
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-foreground">{food.food_name}</h4>
+                      <h4 className="font-semibold text-foreground mb-1">{food.food_name}</h4>
                       <p className="text-sm text-muted-foreground mb-2">
                         {food.quantity} {food.unit}
                         {food.added_via && ` • ${food.added_via === 'camera' ? '📸 Камера' : '✍️ Вручную'}`}
                       </p>
                       <div className="flex gap-4 text-sm">
                         <span className="font-semibold">{food.calories} ккал</span>
-                        <span className="text-muted-foreground">
-                          Б: {food.protein}г
-                        </span>
-                        <span className="text-muted-foreground">
-                          Ж: {food.fat}г
-                        </span>
-                        <span className="text-muted-foreground">
-                          У: {food.carbs}г
-                        </span>
+                        <span className="text-muted-foreground">Б: {food.protein}г</span>
+                        <span className="text-muted-foreground">Ж: {food.fat}г</span>
+                        <span className="text-muted-foreground">У: {food.carbs}г</span>
                       </div>
                     </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="flex-shrink-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Продукт "{food.food_name}" будет удалён из приёма пищи.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Отмена</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteFood.mutate(food.id)}
-                            className="bg-destructive text-destructive-foreground"
-                          >
-                            Удалить
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (window.confirm(`Удалить "${food.food_name}" из приёма пищи?`)) {
+                          deleteFood.mutate(food.id);
+                        }
+                      }}
+                      className="flex-shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
                   </div>
                 </Card>
               ))}
@@ -395,6 +332,63 @@ const MealDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Save as Recipe Dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Сохранить как блюдо</DialogTitle>
+            <DialogDescription>
+              Это блюдо будет сохранено для быстрого добавления в будущем
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="recipe-name">Название блюда</Label>
+              <Input
+                id="recipe-name"
+                value={recipeName}
+                onChange={(e) => setRecipeName(e.target.value)}
+                placeholder="Например: Мой завтрак"
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={() => saveAsRecipe.mutate()}
+              disabled={!recipeName.trim() || saveAsRecipe.isPending}
+              className="bg-gradient-primary hover:opacity-90 text-white border-0"
+            >
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Meal Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить приём пищи?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Весь приём пищи и все продукты в нём будут удалены. Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMeal.mutate()}
+              className="bg-destructive text-destructive-foreground"
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
