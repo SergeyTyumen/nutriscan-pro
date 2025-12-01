@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Search, Camera, ChevronLeft, ChevronRight, TrendingUp, Settings } from 'lucide-react';
+import { LogOut, Search, Camera, ChevronLeft, ChevronRight, TrendingUp, Settings, BookMarked } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CaloriesWidget } from '@/components/CaloriesWidget';
 import { MacrosWidget } from '@/components/MacrosWidget';
@@ -131,29 +131,41 @@ const Index = () => {
           <div className="pt-2">
             <h2 className="text-lg font-semibold text-foreground mb-3">Приёмы пищи</h2>
             
-            {/* Two ways to add food */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            {/* Three ways to add food */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
               <Button
                 onClick={() => setSearchDialogOpen(true)}
                 variant="outline"
-                className="h-auto py-4 flex-col gap-2 hover:bg-accent hover:border-primary transition-all"
+                className="h-auto py-3 flex-col gap-1.5 hover:bg-accent hover:border-primary transition-all"
               >
-                <Search className="w-6 h-6 text-primary" />
+                <Search className="w-5 h-5 text-primary" />
                 <div className="text-center">
-                  <div className="font-semibold text-sm">Ввести вручную</div>
-                  <div className="text-xs text-muted-foreground mt-1">Поиск по базе продуктов</div>
+                  <div className="font-semibold text-xs">Ввести</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">Поиск продуктов</div>
                 </div>
               </Button>
               
               <Button
                 onClick={() => navigate('/camera')}
                 variant="outline"
-                className="h-auto py-4 flex-col gap-2 hover:bg-accent hover:border-primary transition-all"
+                className="h-auto py-3 flex-col gap-1.5 hover:bg-accent hover:border-primary transition-all"
               >
-                <Camera className="w-6 h-6 text-primary" />
+                <Camera className="w-5 h-5 text-primary" />
                 <div className="text-center">
-                  <div className="font-semibold text-sm">Распознать по фото</div>
-                  <div className="text-xs text-muted-foreground mt-1">ИИ определит продукты</div>
+                  <div className="font-semibold text-xs">Сканировать</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">ИИ по фото</div>
+                </div>
+              </Button>
+
+              <Button
+                onClick={() => navigate('/recipes')}
+                variant="outline"
+                className="h-auto py-3 flex-col gap-1.5 hover:bg-accent hover:border-primary transition-all"
+              >
+                <BookMarked className="w-5 h-5 text-primary" />
+                <div className="text-center">
+                  <div className="font-semibold text-xs">Мои блюда</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">Из сохранённых</div>
                 </div>
               </Button>
             </div>
