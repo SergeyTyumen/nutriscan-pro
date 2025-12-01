@@ -204,7 +204,11 @@ const Stats = () => {
           </TabsList>
 
           <TabsContent value="calories" className="space-y-4">
-            <CaloriesChart data={mealsData || []} period={period === 'month' ? 'month' : 'month'} />
+            <CaloriesChart 
+              data={mealsData || []} 
+              period={period === 'month' ? 'month' : 'month'} 
+              dailyGoal={profile?.daily_calorie_goal || 2000}
+            />
             <WeightTrend />
           </TabsContent>
 
