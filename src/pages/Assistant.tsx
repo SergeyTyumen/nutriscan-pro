@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, Send, Image as ImageIcon, Loader2, Plus, Volume2 } from 'lucide-react';
+import { Mic, Send, Image as ImageIcon, Loader2, Volume2, Sparkles, TrendingUp, Target, Heart, ArrowLeft, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ const Assistant = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Привет! Я твой умный помощник по питанию 🤖\n\nЯ могу:\n• Добавлять еду в дневник ("Добавь 2 яблока на завтрак")\n• Добавлять воду ("Добавь стакан воды")\n• Показывать статистику ("Сколько я съел сегодня?")\n• Анализировать фото еды 📸\n• Давать советы по питанию\n\nПросто скажи или напиши, что нужно сделать!'
+      content: 'Привет! Я твой персональный диет-коуч 🥗\n\nЯ помогу тебе:\n• Достигать целей по питанию\n• Анализировать твой рацион\n• Составлять планы на день\n• Поддерживать мотивацию\n\nЧто будем делать сегодня?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -68,6 +69,50 @@ const Assistant = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Fetch today's stats
+  const { data: todayStats } = useQuery({
+    queryKey: ['assistant-today-stats', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+
+      const today = new Date().toISOString().split('T')[0];
+
+      // Get today's meals
+      const { data: meals } = await supabase
+        .from('meals')
+        .select('total_calories, total_protein, total_fat, total_carbs')
+        .eq('user_id', user.id)
+        .eq('meal_date', today);
+
+      // Get today's water
+      const { data: water } = await supabase
+        .from('water_log')
+        .select('amount_ml')
+        .eq('user_id', user.id)
+        .eq('log_date', today);
+
+      // Get profile goals
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('daily_calorie_goal, daily_water_goal')
+        .eq('id', user.id)
+        .single();
+
+      const totalCalories = meals?.reduce((sum, m) => sum + m.total_calories, 0) || 0;
+      const totalWater = water?.reduce((sum, w) => sum + w.amount_ml, 0) || 0;
+      const mealsCount = meals?.length || 0;
+
+      return {
+        calories: totalCalories,
+        caloriesGoal: profile?.daily_calorie_goal || 2000,
+        water: totalWater,
+        waterGoal: profile?.daily_water_goal || 2000,
+        mealsCount
+      };
+    },
+    enabled: !!user?.id,
+  });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -449,14 +494,98 @@ const Assistant = () => {
     setIsSpeaking(null);
   };
 
+  const quickActions = [
+    {
+      label: 'План на день',
+      prompt: 'Составь мне план питания на сегодня с учётом моих целей',
+      icon: Target
+    },
+    {
+      label: 'Что улучшить?',
+      prompt: 'Проанализируй мой рацион за последние 7 дней и скажи, что можно улучшить',
+      icon: TrendingUp
+    },
+    {
+      label: 'Мотивация',
+      prompt: 'Мне нужна мотивация. Помоги мне не сбиться с пути к цели',
+      icon: Heart
+    }
+  ];
+
+  const handleQuickAction = async (prompt: string) => {
+    setInput('');
+    await streamChat(prompt);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted pb-20">
       <div className="container mx-auto px-4 py-6">
-        <h1 className="text-3xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-          AI Помощник
-        </h1>
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            className="rounded-2xl"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold text-foreground">Диет-коуч</h1>
+        </div>
 
-        <Card className="h-[calc(100vh-220px)] flex flex-col">
+        {/* Today's Summary */}
+        {todayStats && (
+          <Card className="bg-gradient-primary/10 p-5 mb-4 border-primary/20">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Сегодня</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Калории</p>
+                <p className="text-lg font-bold text-foreground">
+                  {todayStats.calories}
+                  <span className="text-sm font-normal text-muted-foreground"> / {todayStats.caloriesGoal}</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Вода</p>
+                <p className="text-lg font-bold text-foreground">
+                  {Math.round(todayStats.water / 1000 * 10) / 10}
+                  <span className="text-sm font-normal text-muted-foreground">L / {todayStats.waterGoal / 1000}L</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Приёмов</p>
+                <p className="text-lg font-bold text-foreground">{todayStats.mealsCount}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Quick Actions */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-2">Быстрые действия</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {quickActions.map((action, index) => {
+              const Icon = action.icon;
+              return (
+                <Button
+                  key={index}
+                  variant="outline"
+                  className="h-auto py-3 flex-col gap-1.5 hover:bg-accent hover:border-primary transition-all"
+                  onClick={() => handleQuickAction(action.prompt)}
+                  disabled={isLoading}
+                >
+                  <Icon className="w-4 h-4 text-primary" />
+                  <span className="text-[10px] font-medium text-center leading-tight">{action.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Card className="h-[calc(100vh-450px)] flex flex-col">
           <ScrollArea ref={scrollRef} className="flex-1 p-4">
             <div className="space-y-4">
               {messages.map((message, index) => (
