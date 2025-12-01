@@ -18,6 +18,7 @@ export const NotificationSettings = () => {
   const queryClient = useQueryClient();
   const [permissionStatus, setPermissionStatus] = useState<any>(null);
   const [scheduledCount, setScheduledCount] = useState<number>(0);
+  const [lastError, setLastError] = useState<string>('');
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['notification-settings', user?.id],
@@ -89,10 +90,7 @@ export const NotificationSettings = () => {
         daily_stats_time: formatTimeForInput(settings.daily_stats_time) || '20:00',
       });
 
-      // Инициализируем сервис если уведомления включены
-      if (settings.push_enabled) {
-        initializeService();
-      }
+      // НЕ инициализируем сервис автоматически - только при явном включении
     }
   }, [settings]);
 
@@ -100,6 +98,16 @@ export const NotificationSettings = () => {
     if (!isNativePlatform()) return;
     
     try {
+      // Проверяем доступность плагинов перед инициализацией
+      const availability = await notificationService.isAvailable();
+      if (!availability.available) {
+        toast.error('Плагины уведомлений недоступны', {
+          description: availability.error || 'Выполните `npx cap sync android` и пересоберите приложение'
+        });
+        setLastError(availability.error || 'Plugins not available');
+        return;
+      }
+
       await notificationService.initialize();
       
       // Проверяем разрешения
@@ -112,8 +120,12 @@ export const NotificationSettings = () => {
       
       console.log('Notification service initialized, permissions:', permissions);
       console.log('Scheduled notifications:', scheduled.length);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize notification service:', error);
+      toast.error('Ошибка инициализации уведомлений', {
+        description: error.message || 'Неизвестная ошибка'
+      });
+      setLastError(error.message || 'Unknown error');
     }
   };
 
@@ -129,6 +141,10 @@ export const NotificationSettings = () => {
 
       // Если включаем уведомления впервые, инициализируем сервис
       if (data.push_enabled && !settings?.push_enabled) {
+        const availability = await notificationService.isAvailable();
+        if (!availability.available) {
+          throw new Error(availability.error || 'Notification plugins not available');
+        }
         await notificationService.initialize();
       }
 
@@ -225,6 +241,16 @@ export const NotificationSettings = () => {
           </div>
 
           {/* Статус уведомлений */}
+          {lastError && (
+            <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
+              <div className="text-sm font-medium text-destructive mb-2">❌ Ошибка</div>
+              <div className="text-xs text-destructive/80 break-words mb-2">{lastError}</div>
+              <p className="text-xs text-muted-foreground">
+                💡 Выполните <code className="bg-muted px-1 rounded">npx cap sync android</code> и пересоберите приложение
+              </p>
+            </div>
+          )}
+
           {permissionStatus && (
             <div className="p-4 rounded-2xl bg-secondary/30 border border-border">
               <div className="flex items-center justify-between mb-2">
