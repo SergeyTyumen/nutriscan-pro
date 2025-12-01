@@ -263,6 +263,8 @@ export const VitaButton = () => {
   const startListening = async () => {
     try {
       console.log('[VITA] Начинаем прослушивание');
+      console.log('[VITA] isNativePlatform:', isNativePlatform());
+      console.log('[VITA] Current state:', state);
       
       toast({
         title: "Слушаю",
@@ -273,6 +275,7 @@ export const VitaButton = () => {
       
       // На нативной платформе используем SpeechRecognition
       if (isNativePlatform()) {
+        console.log('[VITA] Используем нативное распознавание речи');
         const SpeechRecognition = await loadSpeechRecognition();
         if (!SpeechRecognition) {
           throw new Error('Speech recognition not available');
@@ -322,38 +325,58 @@ export const VitaButton = () => {
 
       } else {
         // На веб-платформе используем MediaRecorder
+        console.log('[VITA] Используем MediaRecorder для веб-платформы');
+        
+        console.log('[VITA] Запрашиваем доступ к микрофону...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('[VITA] Доступ к микрофону получен');
+        
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
 
         mediaRecorder.ondataavailable = (event) => {
+          console.log('[VITA] Получены аудио данные, размер:', event.data.size);
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
           }
         };
 
         mediaRecorder.onstop = async () => {
+          console.log('[VITA] Запись остановлена, обрабатываем аудио...');
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log('[VITA] Размер аудио blob:', audioBlob.size);
           stream.getTracks().forEach(track => track.stop());
           await processAudio(audioBlob);
         };
 
+        mediaRecorder.onerror = (event: any) => {
+          console.error('[VITA] MediaRecorder error:', event.error);
+        };
+
+        console.log('[VITA] Начинаем запись...');
         mediaRecorder.start();
 
         // Автоматическая остановка через 5 секунд
         setTimeout(() => {
+          console.log('[VITA] 5 секунд прошло, останавливаем запись');
           if (mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
           }
         }, 5000);
       }
 
-    } catch (error) {
-      console.error('Error starting recording:', error);
+    } catch (error: any) {
+      console.error('[VITA] Error starting recording:', error);
+      console.error('[VITA] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      
       toast({
         title: "Ошибка",
-        description: "Не удалось получить доступ к микрофону",
+        description: error.message || "Не удалось получить доступ к микрофону",
         variant: "destructive"
       });
       setState('idle');
@@ -462,35 +485,50 @@ export const VitaButton = () => {
 
   const processAudio = async (audioBlob: Blob) => {
     try {
+      console.log('[VITA] Начинаем обработку аудио blob');
       setState('processing');
 
       // Конвертируем в base64
+      console.log('[VITA] Конвертируем аудио в base64...');
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       
       reader.onloadend = async () => {
+        console.log('[VITA] Base64 конвертация завершена');
         const base64Audio = reader.result?.toString().split(',')[1];
         
         if (!base64Audio) {
           throw new Error('Failed to convert audio');
         }
 
+        console.log('[VITA] Размер base64 аудио:', base64Audio.length);
+
         try {
           // Отправляем на распознавание
+          console.log('[VITA] Отправляем на voice-to-text edge function...');
           const { data: transcription, error: transcriptionError } = await supabase.functions.invoke('voice-to-text', {
             body: { audio: base64Audio }
           });
 
+          console.log('[VITA] Ответ от voice-to-text:', { transcription, transcriptionError });
+
           if (transcriptionError) {
-            console.error('Transcription error:', transcriptionError);
-            throw new Error('Failed to transcribe audio');
+            console.error('[VITA] Transcription error:', transcriptionError);
+            throw transcriptionError;
           }
 
           if (!transcription?.text) {
+            console.error('[VITA] No transcription text in response');
             throw new Error('No transcription text received');
           }
 
-          console.log('Transcribed text:', transcription.text);
+          console.log('[VITA] Распознанный текст:', transcription.text);
+
+          console.log('[VITA] Отправляем текст в AI assistant...');
+
+          // Get user ID
+          const { data: { user } } = await supabase.auth.getUser();
+          console.log('[VITA] User ID:', user?.id);
 
           // Отправляем в AI ассистента с контекстом
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
@@ -498,27 +536,38 @@ export const VitaButton = () => {
               messages: [
                 { role: 'user', content: transcription.text }
               ],
-              userContext: todayStats
+              userContext: {
+                ...todayStats,
+                userId: user?.id
+              }
             }
           });
 
+          console.log('[VITA] Ответ от AI assistant:', { aiResponse, aiError });
+
           if (aiError) {
-            console.error('AI error:', aiError);
-            throw new Error('Failed to get AI response');
+            console.error('[VITA] AI error:', aiError);
+            throw aiError;
           }
 
           if (!aiResponse) {
+            console.error('[VITA] No AI response');
             throw new Error('No AI response received');
           }
 
-          console.log('AI response:', aiResponse);
+          console.log('[VITA] AI response успешно получен');
 
           // Озвучиваем ответ
           setState('speaking');
-          await speakResponse(aiResponse.response || aiResponse.message);
+          await speakResponse(aiResponse.response || aiResponse.message || 'Не удалось получить ответ');
 
         } catch (error: any) {
-          console.error('Processing error:', error);
+          console.error('[VITA] Processing error (inner catch):', error);
+          console.error('[VITA] Error details:', {
+            message: error.message,
+            status: error.status,
+            details: error
+          });
           
           // Показываем дружественную ошибку пользователю
           if (error.message?.includes('429') || error.status === 429) {
@@ -536,7 +585,7 @@ export const VitaButton = () => {
           } else {
             toast({
               title: "Ошибка",
-              description: "Не удалось обработать команду",
+              description: error.message || "Не удалось обработать команду",
               variant: "destructive"
             });
           }
@@ -550,11 +599,17 @@ export const VitaButton = () => {
         }
       };
 
-    } catch (error) {
-      console.error('Error processing audio:', error);
+    } catch (error: any) {
+      console.error('[VITA] Error processing audio (outer catch):', error);
+      console.error('[VITA] Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error
+      });
+      
       toast({
         title: "Ошибка",
-        description: "Не удалось обработать команду",
+        description: error.message || "Не удалось обработать команду",
         variant: "destructive"
       });
       setState('idle');
