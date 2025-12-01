@@ -129,28 +129,35 @@ const Index = () => {
           </div>
 
           <div className="pt-2">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-foreground">Приёмы пищи</h2>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => navigate('/camera')}
-                  size="sm"
-                  variant="secondary"
-                  className="gap-2"
-                >
-                  <Camera className="w-4 h-4" />
-                  Сканировать
-                </Button>
-                <Button
-                  onClick={() => setSearchDialogOpen(true)}
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Search className="w-4 h-4" />
-                  Добавить
-                </Button>
-              </div>
+            <h2 className="text-lg font-semibold text-foreground mb-3">Приёмы пищи</h2>
+            
+            {/* Two ways to add food */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <Button
+                onClick={() => setSearchDialogOpen(true)}
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2 hover:bg-accent hover:border-primary transition-all"
+              >
+                <Search className="w-6 h-6 text-primary" />
+                <div className="text-center">
+                  <div className="font-semibold text-sm">Ввести вручную</div>
+                  <div className="text-xs text-muted-foreground mt-1">Поиск по базе продуктов</div>
+                </div>
+              </Button>
+              
+              <Button
+                onClick={() => navigate('/camera')}
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2 hover:bg-accent hover:border-primary transition-all"
+              >
+                <Camera className="w-6 h-6 text-primary" />
+                <div className="text-center">
+                  <div className="font-semibold text-sm">Распознать по фото</div>
+                  <div className="text-xs text-muted-foreground mt-1">ИИ определит продукты</div>
+                </div>
+              </Button>
             </div>
+            
             <MealsList />
           </div>
         </div>
