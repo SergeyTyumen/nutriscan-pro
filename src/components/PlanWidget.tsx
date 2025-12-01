@@ -3,22 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Check, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-const mealTypeEmoji: Record<string, string> = {
-  breakfast: '🌅',
-  lunch: '☀️',
-  dinner: '🌙',
-  snack: '🍪',
-};
-
-const mealTypeLabel: Record<string, string> = {
-  breakfast: 'Завтрак',
-  lunch: 'Обед',
-  dinner: 'Ужин',
-  snack: 'Перекус',
+const mealTypeConfig: Record<string, { label: string; short: string; color: string }> = {
+  breakfast: { label: 'Завтрак', short: 'З', color: 'bg-emerald-500' },
+  lunch: { label: 'Обед', short: 'О', color: 'bg-blue-500' },
+  dinner: { label: 'Ужин', short: 'У', color: 'bg-purple-500' },
+  snack: { label: 'Перекус', short: 'П', color: 'bg-orange-500' },
 };
 
 export const PlanWidget = () => {
@@ -142,16 +136,17 @@ export const PlanWidget = () => {
   const plannedTypes = new Set(plans?.map(p => p.meal_type) || []);
 
   return (
-    <Card>
+    <Card className="border-0 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <CalendarDays className="w-5 h-5" />
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <CalendarDays className="w-4 h-4" />
           План на сегодня
         </CardTitle>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => navigate('/planner')}
+          className="h-8 w-8 p-0"
         >
           <Plus className="w-4 h-4" />
         </Button>
@@ -160,23 +155,29 @@ export const PlanWidget = () => {
         {mealTypes.map((type) => {
           const plan = plans?.find(p => p.meal_type === type);
           const hasPlanned = plannedTypes.has(type);
+          const config = mealTypeConfig[type];
 
           if (!hasPlanned) {
             return (
               <div
                 key={type}
-                className="flex items-center justify-between p-2 rounded-lg border border-dashed"
+                className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span>{mealTypeEmoji[type]}</span>
+                <div className="flex items-center gap-3">
+                  <Avatar className={`h-9 w-9 ${config.color}`}>
+                    <AvatarFallback className="bg-transparent text-white font-semibold text-sm">
+                      {config.short}
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="text-sm text-muted-foreground">
-                    {mealTypeLabel[type]}: нет плана
+                    {config.label}: нет плана
                   </span>
                 </div>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => navigate(`/planner?mealType=${type}`)}
+                  className="h-8 w-8 p-0"
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
@@ -195,23 +196,28 @@ export const PlanWidget = () => {
             return (
               <div
                 key={type}
-                className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20"
+                className="flex items-center justify-between p-3 rounded-xl bg-card border hover:shadow-sm transition-all"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>{mealTypeEmoji[type]}</span>
-                    <span className="text-sm font-semibold">
-                      {mealTypeLabel[type]}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {plan.meal_plan_items.length} продуктов • {totals.calories} ккал
+                <div className="flex items-center gap-3 flex-1">
+                  <Avatar className={`h-9 w-9 ${config.color}`}>
+                    <AvatarFallback className="bg-transparent text-white font-semibold text-sm">
+                      {config.short}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">
+                      {config.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {plan.meal_plan_items.length} продуктов • {totals.calories} ккал
+                    </div>
                   </div>
                 </div>
                 <Button
                   size="sm"
                   onClick={() => markAsEatenMutation.mutate(plan.id)}
                   disabled={markAsEatenMutation.isPending}
+                  className="h-9 rounded-full"
                 >
                   <Check className="w-4 h-4 mr-1" />
                   Съел
