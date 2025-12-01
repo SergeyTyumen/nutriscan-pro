@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowLeft, Save, Loader2, Moon, Sun, Palette, Edit2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Moon, Sun, Palette, Edit2, Bell, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,10 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { AvatarPicker } from '@/components/AvatarPicker';
-import { NotificationSettings } from '@/components/NotificationSettings';
 import { useTheme } from '@/components/ThemeProvider';
 
 const Profile = () => {
@@ -24,6 +22,8 @@ const Profile = () => {
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [isCalculatingGoals, setIsCalculatingGoals] = useState(false);
+  const [goalType, setGoalType] = useState<'lose' | 'maintain' | 'gain'>('maintain');
 
   const { data: profile, isLoading, error: profileError } = useQuery({
     queryKey: ['profile-edit', user?.id],
@@ -119,6 +119,46 @@ const Profile = () => {
     updateProfile.mutate(formData);
   };
 
+  const calculateGoalsWithAI = async () => {
+    if (!formData.age || !formData.gender || !formData.height || !formData.current_weight || !formData.activity_level) {
+      toast.error('Заполните все личные данные');
+      return;
+    }
+
+    setIsCalculatingGoals(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('calculate-goals', {
+        body: {
+          age: Number(formData.age),
+          gender: formData.gender,
+          height: Number(formData.height),
+          currentWeight: Number(formData.current_weight),
+          targetWeight: formData.target_weight ? Number(formData.target_weight) : null,
+          activityLevel: formData.activity_level,
+          goal: goalType === 'lose' ? 'похудение' : goalType === 'gain' ? 'набор массы' : 'поддержание веса'
+        }
+      });
+
+      if (error) throw error;
+
+      setFormData({
+        ...formData,
+        daily_calorie_goal: data.dailyCalories,
+        daily_protein_goal: data.protein,
+        daily_fat_goal: data.fat,
+        daily_carbs_goal: data.carbs,
+        daily_water_goal: data.water,
+      });
+
+      toast.success(data.explanation || 'Цели рассчитаны!');
+    } catch (error: any) {
+      console.error('Error calculating goals:', error);
+      toast.error(error.message || 'Ошибка при расчете целей');
+    } finally {
+      setIsCalculatingGoals(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted flex items-center justify-center">
@@ -164,14 +204,7 @@ const Profile = () => {
           <h1 className="text-2xl font-bold text-foreground">Профиль</h1>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="profile">Профиль</TabsTrigger>
-            <TabsTrigger value="notifications">Уведомления</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="profile" className="space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <Card className="bg-card p-6 shadow-md border-border">
             <div className="flex items-center gap-2 mb-4">
               <Palette className="h-5 w-5 text-primary" />
@@ -337,7 +370,86 @@ const Profile = () => {
           </Card>
 
           <Card className="bg-card p-6 shadow-md border-border">
-            <h3 className="font-semibold text-lg mb-4">Цели по питанию</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">Цели по питанию</h3>
+              <Button
+                type="button"
+                onClick={() => navigate('/profile/notifications')}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                <Bell className="w-4 h-4" />
+                Уведомления
+              </Button>
+            </div>
+
+            {/* Goal Type Selection */}
+            <div className="mb-4">
+              <Label>Ваша цель</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant={goalType === 'lose' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setGoalType('lose')}
+                  className={goalType === 'lose' ? 'bg-gradient-primary text-white border-0' : ''}
+                >
+                  Похудеть
+                </Button>
+                <Button
+                  type="button"
+                  variant={goalType === 'maintain' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setGoalType('maintain')}
+                  className={goalType === 'maintain' ? 'bg-gradient-primary text-white border-0' : ''}
+                >
+                  Удерживать
+                </Button>
+                <Button
+                  type="button"
+                  variant={goalType === 'gain' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setGoalType('gain')}
+                  className={goalType === 'gain' ? 'bg-gradient-primary text-white border-0' : ''}
+                >
+                  Набрать
+                </Button>
+              </div>
+            </div>
+
+            {/* AI Calculate Button */}
+            <div className="bg-gradient-primary/10 rounded-2xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium mb-1">Рассчитать с ИИ</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Персональные рекомендации на основе ваших данных
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={calculateGoalsWithAI}
+                    disabled={isCalculatingGoals}
+                    size="sm"
+                    className="bg-gradient-primary hover:opacity-90 text-white border-0"
+                  >
+                    {isCalculatingGoals ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Расчёт...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Получить рекомендации
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <Label htmlFor="daily_calorie_goal">Калории (ккал/день)</Label>
@@ -423,13 +535,7 @@ const Profile = () => {
               Выйти
             </Button>
           </div>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="notifications">
-            <NotificationSettings />
-          </TabsContent>
-        </Tabs>
+        </form>
       </div>
     </div>
   );
