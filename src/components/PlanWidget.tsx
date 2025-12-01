@@ -4,9 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Check, CalendarDays } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useState } from 'react';
 
 const mealTypeConfig: Record<string, { label: string; short: string; color: string }> = {
   breakfast: { label: 'Завтрак', short: 'З', color: 'bg-emerald-500' },
@@ -19,6 +22,8 @@ export const PlanWidget = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -42,15 +47,23 @@ export const PlanWidget = () => {
   });
 
   const markAsEatenMutation = useMutation({
-    mutationFn: async (planId: string) => {
+    mutationFn: async ({ planId, selectedItemIds }: { planId: string; selectedItemIds: string[] }) => {
       const plan = plans?.find(p => p.id === planId);
       if (!plan) throw new Error('Plan not found');
+
+      const itemsToAdd = plan.meal_plan_items.filter((item: any) => 
+        selectedItemIds.includes(item.id)
+      );
+
+      if (itemsToAdd.length === 0) {
+        throw new Error('No items selected');
+      }
 
       const now = new Date();
       const mealTime = now.toTimeString().split(' ')[0];
 
-      // Create meal entry
-      const totals = plan.meal_plan_items.reduce(
+      // Calculate totals for selected items only
+      const totals = itemsToAdd.reduce(
         (acc: any, item: any) => ({
           calories: acc.calories + item.calories,
           protein: acc.protein + item.protein,
@@ -78,8 +91,8 @@ export const PlanWidget = () => {
 
       if (mealError) throw mealError;
 
-      // Add foods to meal
-      const foods = plan.meal_plan_items.map((item: any) => ({
+      // Add selected foods to meal
+      const foods = itemsToAdd.map((item: any) => ({
         meal_id: meal.id,
         food_name: item.food_name,
         quantity: item.quantity,
@@ -97,24 +110,66 @@ export const PlanWidget = () => {
 
       if (foodsError) throw foodsError;
 
-      // Mark plan as eaten
-      const { error: updateError } = await supabase
-        .from('meal_plans')
-        .update({ status: 'eaten' })
-        .eq('id', planId);
+      // Delete selected items from plan
+      const { error: deleteError } = await supabase
+        .from('meal_plan_items')
+        .delete()
+        .in('id', selectedItemIds);
 
-      if (updateError) throw updateError;
+      if (deleteError) throw deleteError;
+
+      // Check if plan has any items left
+      const remainingItems = plan.meal_plan_items.filter((item: any) => 
+        !selectedItemIds.includes(item.id)
+      );
+
+      // If no items left, mark plan as eaten
+      if (remainingItems.length === 0) {
+        const { error: updateError } = await supabase
+          .from('meal_plans')
+          .update({ status: 'eaten' })
+          .eq('id', planId);
+
+        if (updateError) throw updateError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal-plans'] });
       queryClient.invalidateQueries({ queryKey: ['meals'] });
+      setSelectedPlan(null);
+      setSelectedItems({});
       toast.success('Добавлено в дневник!');
     },
     onError: (error) => {
       console.error('Error marking as eaten:', error);
-      toast.error('Ошибка при добавлении');
+      toast.error(error instanceof Error ? error.message : 'Ошибка при добавлении');
     },
   });
+
+  const handleOpenDialog = (plan: any) => {
+    setSelectedPlan(plan);
+    // By default, select all items
+    const allSelected: Record<string, boolean> = {};
+    plan.meal_plan_items.forEach((item: any) => {
+      allSelected[item.id] = true;
+    });
+    setSelectedItems(allSelected);
+  };
+
+  const handleConfirmEaten = () => {
+    if (!selectedPlan) return;
+    
+    const selectedIds = Object.keys(selectedItems).filter(id => selectedItems[id]);
+    if (selectedIds.length === 0) {
+      toast.error('Выберите хотя бы один продукт');
+      return;
+    }
+
+    markAsEatenMutation.mutate({
+      planId: selectedPlan.id,
+      selectedItemIds: selectedIds,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -215,12 +270,10 @@ export const PlanWidget = () => {
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => markAsEatenMutation.mutate(plan.id)}
-                  disabled={markAsEatenMutation.isPending}
+                  onClick={() => handleOpenDialog(plan)}
                   className="h-9 rounded-full"
                 >
-                  <Check className="w-4 h-4 mr-1" />
-                  Съел
+                  Записать
                 </Button>
               </div>
             );
@@ -229,6 +282,105 @@ export const PlanWidget = () => {
           return null;
         })}
       </CardContent>
+
+      <Dialog open={!!selectedPlan} onOpenChange={(open) => !open && setSelectedPlan(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Выберите что съели</DialogTitle>
+            <DialogDescription>
+              Отметьте продукты, которые вы съели из плана
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedPlan && (
+            <div className="space-y-3">
+              {selectedPlan.meal_plan_items.map((item: any) => {
+                const isChecked = selectedItems[item.id] || false;
+                
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      isChecked ? 'bg-primary/5 border-primary' : 'bg-card'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={(checked) => {
+                        setSelectedItems(prev => ({
+                          ...prev,
+                          [item.id]: checked as boolean,
+                        }));
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">{item.food_name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {item.quantity}{item.unit}
+                      </div>
+                      <div className="text-sm mt-1">
+                        <span className="font-semibold">{item.calories} ккал</span>
+                        {' | '}
+                        <span className="text-muted-foreground">
+                          Б: {item.protein}г Ж: {item.fat}г У: {item.carbs}г
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="border-t pt-3">
+                <div className="text-sm font-semibold mb-2">Итого:</div>
+                <div className="text-sm">
+                  {(() => {
+                    const selectedItemsList = selectedPlan.meal_plan_items.filter((item: any) => 
+                      selectedItems[item.id]
+                    );
+                    const totals = selectedItemsList.reduce(
+                      (acc: any, item: any) => ({
+                        calories: acc.calories + item.calories,
+                        protein: acc.protein + item.protein,
+                        fat: acc.fat + item.fat,
+                        carbs: acc.carbs + item.carbs,
+                      }),
+                      { calories: 0, protein: 0, fat: 0, carbs: 0 }
+                    );
+                    
+                    return (
+                      <>
+                        <span className="font-bold">{totals.calories} ккал</span>
+                        {' | '}
+                        <span className="text-muted-foreground">
+                          Б: {totals.protein.toFixed(1)}г Ж: {totals.fat.toFixed(1)}г У: {totals.carbs.toFixed(1)}г
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setSelectedPlan(null)}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleConfirmEaten}
+                  disabled={markAsEatenMutation.isPending}
+                >
+                  {markAsEatenMutation.isPending ? 'Добавление...' : 'Добавить'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

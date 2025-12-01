@@ -65,6 +65,14 @@ const MealPlanner = () => {
 
   const currentStep = steps[currentStepIndex];
 
+  // Meal budget percentages
+  const mealBudgetPercents: Record<string, number> = {
+    breakfast: 0.25,
+    lunch: 0.35,
+    dinner: 0.30,
+    snack: 0.10,
+  };
+
   // Fetch profile
   const { data: profile } = useQuery({
     queryKey: ['profile', user?.id],
@@ -345,6 +353,17 @@ const MealPlanner = () => {
 
   const budget = recommendations?.budget || { calories: 0, protein: 0, fat: 0, carbs: 0 };
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
+  
+  // Calculate meal budget for display
+  const mealPercent = mealBudgetPercents[mealType] || 0.25;
+  const mealBudget = profile ? {
+    calories: Math.round(profile.daily_calorie_goal * mealPercent),
+    protein: Math.round(profile.daily_protein_goal * mealPercent),
+    fat: Math.round(profile.daily_fat_goal * mealPercent),
+    carbs: Math.round(profile.daily_carbs_goal * mealPercent),
+  } : null;
+
+  const selectedTotals = calculateTotals();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted pb-20">
@@ -373,9 +392,35 @@ const MealPlanner = () => {
             )}
           </CardHeader>
           <CardContent>
+            {mealBudget && (
+              <div className="mb-4 p-3 bg-primary/10 rounded-lg">
+                <div className="text-sm font-semibold mb-2">
+                  Бюджет для {mealTypeConfig[mealType]?.label.toLowerCase()}а:
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Выбрано: </span>
+                    <span className={selectedTotals.calories > mealBudget.calories ? 'text-destructive font-semibold' : 'font-semibold'}>
+                      {selectedTotals.calories}
+                    </span>
+                    <span className="text-muted-foreground"> / {mealBudget.calories} ккал</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Осталось: </span>
+                    <span className="font-semibold">{budget.calories} ккал</span>
+                  </div>
+                </div>
+                {selectedTotals.calories > mealBudget.calories && (
+                  <div className="text-xs text-destructive mt-2">
+                    ⚠️ Превышен бюджет приёма пищи
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-lg mb-4">
               <div>
-                <div className="text-xs text-muted-foreground">Калории</div>
+                <div className="text-xs text-muted-foreground">Осталось калорий</div>
                 <div className="font-semibold">{budget.calories} ккал</div>
               </div>
               <div>

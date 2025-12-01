@@ -66,13 +66,34 @@ serve(async (req) => {
       { calories: 0, protein: 0, fat: 0, carbs: 0 }
     );
 
-    const budget = {
-      calories: profile.daily_calorie_goal - consumed.calories - selectedTotals.calories,
-      protein: profile.daily_protein_goal - consumed.protein - selectedTotals.protein,
-      fat: profile.daily_fat_goal - consumed.fat - selectedTotals.fat,
-      carbs: profile.daily_carbs_goal - consumed.carbs - selectedTotals.carbs,
+    // Meal budget percentages
+    const mealBudgetPercents: Record<string, number> = {
+      breakfast: 0.25,  // 25% of daily goal
+      lunch: 0.35,      // 35% of daily goal
+      dinner: 0.30,     // 30% of daily goal
+      snack: 0.10,      // 10% of daily goal
     };
 
+    const mealPercent = mealBudgetPercents[mealType] || 0.25;
+
+    // Calculate meal-specific budget
+    const mealBudget = {
+      calories: Math.round(profile.daily_calorie_goal * mealPercent),
+      protein: Math.round(profile.daily_protein_goal * mealPercent),
+      fat: Math.round(profile.daily_fat_goal * mealPercent),
+      carbs: Math.round(profile.daily_carbs_goal * mealPercent),
+    };
+
+    // Subtract already selected items from meal budget
+    const budget = {
+      calories: mealBudget.calories - selectedTotals.calories,
+      protein: mealBudget.protein - selectedTotals.protein,
+      fat: mealBudget.fat - selectedTotals.fat,
+      carbs: mealBudget.carbs - selectedTotals.carbs,
+    };
+
+    console.log(`Meal type: ${mealType}, Budget percent: ${mealPercent * 100}%`);
+    console.log("Meal budget:", mealBudget);
     console.log("Remaining budget:", budget);
 
     // Get food database items for recommendations
@@ -113,22 +134,16 @@ serve(async (req) => {
 
 ${mealTypeContext[mealType] || ""}
 
-ЦЕЛИ пользователя на день:
-- Калории: ${profile.daily_calorie_goal} ккал
-- Белки: ${profile.daily_protein_goal}г
-- Жиры: ${profile.daily_fat_goal}г
-- Углеводы: ${profile.daily_carbs_goal}г
+БЮДЖЕТ для этого приёма пищи (${Math.round(mealPercent * 100)}% от дневной нормы):
+- Калории: ${mealBudget.calories} ккал
+- Белки: ${mealBudget.protein}г
+- Жиры: ${mealBudget.fat}г
+- Углеводы: ${mealBudget.carbs}г
 
-УЖЕ СЪЕДЕНО сегодня:
-- Калории: ${consumed.calories} ккал
-- Белки: ${consumed.protein}г
-- Жиры: ${consumed.fat}г
-- Углеводы: ${consumed.carbs}г
-
-УЖЕ ВЫБРАНО в планировщике:
+УЖЕ ВЫБРАНО в планировщике для этого приёма:
 ${selected?.length > 0 ? selected.map((s: any) => `- ${s.food_name} ${s.quantity}${s.unit}: ${s.calories} ккал (Б: ${s.protein}г, Ж: ${s.fat}г, У: ${s.carbs}г)`).join("\n") : "Ничего не выбрано"}
 
-ОСТАВШИЙСЯ БЮДЖЕТ:
+ОСТАВШИЙСЯ БЮДЖЕТ для этого приёма:
 - Калории: ${budget.calories} ккал
 - Белки: ${budget.protein}г
 - Жиры: ${budget.fat}г
@@ -164,10 +179,10 @@ ${foodItems?.slice(0, 50).map((f) => `${f.name}: ${f.calories_per_100g} ккал
 ВАЖНО:
 - Подбери 3-5 КОНКРЕТНЫХ продуктов из базы данных для текущей категории
 - ОБЯЗАТЕЛЬНО учитывай тип приёма пищи (${mealType}): ${mealTypeContext[mealType] || ""}
-- Рассчитай оптимальное количество, чтобы попасть в бюджет
+- Рассчитай оптимальное количество, чтобы попасть в БЮДЖЕТ ПРИЁМА ПИЩИ (${mealBudget.calories} ккал)
 - Учитывай уже выбранные продукты
-- Если бюджет мал (< 100 ккал), предложи легкие продукты
-- НЕ превышай оставшийся бюджет
+- НЕ превышай оставшийся бюджет для ЭТОГО приёма (${budget.calories} ккал)
+- Порции должны быть разумными и не превышать половину оставшегося бюджета
 - Для перекуса НЕ предлагай крупы, супы или основные блюда - только лёгкие продукты
 - Для завтрака подходят лёгкие каши, яйца, молочка
 - Для обеда и ужина можно полноценные гарниры и белковые блюда`;
