@@ -54,7 +54,7 @@ export const CaloriesWidget = () => {
         </div>
         <Progress value={percentage} className="h-2 bg-white/20" />
         <p className="text-sm mt-3 opacity-90">
-          {remaining > 0 ? `Осталось ${remaining} ккал` : 'Цель достигнута! 🎉'}
+          Цель на день: {goal} ккал. {remaining > 0 ? `Осталось ${remaining} ккал` : 'Цель достигнута! 🎉'}
         </p>
       </div>
     </Card>

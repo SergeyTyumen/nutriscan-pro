@@ -7,7 +7,6 @@ export const BottomNav = () => {
   const links = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/recipes', icon: BookMarked, label: 'Рецепты' },
-    { path: '/camera', icon: Camera, label: 'Камера' },
     { path: '/assistant', icon: MessageCircle, label: 'Помощник' },
     { path: '/stats', icon: TrendingUp, label: 'Статистика' },
     { path: '/profile', icon: User, label: 'Профиль' },
