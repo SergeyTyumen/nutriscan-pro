@@ -16,6 +16,8 @@ import { isNativePlatform } from '@/utils/platform';
 export const NotificationSettings = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [permissionStatus, setPermissionStatus] = useState<any>(null);
+  const [scheduledCount, setScheduledCount] = useState<number>(0);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['notification-settings', user?.id],
@@ -86,8 +88,34 @@ export const NotificationSettings = () => {
         daily_stats_enabled: settings.daily_stats_enabled,
         daily_stats_time: formatTimeForInput(settings.daily_stats_time) || '20:00',
       });
+
+      // Инициализируем сервис если уведомления включены
+      if (settings.push_enabled) {
+        initializeService();
+      }
     }
   }, [settings]);
+
+  const initializeService = async () => {
+    if (!isNativePlatform()) return;
+    
+    try {
+      await notificationService.initialize();
+      
+      // Проверяем разрешения
+      const permissions = await notificationService.checkPermissions();
+      setPermissionStatus(permissions);
+      
+      // Получаем количество запланированных уведомлений
+      const scheduled = await notificationService.getScheduledNotifications();
+      setScheduledCount(scheduled.length);
+      
+      console.log('Notification service initialized, permissions:', permissions);
+      console.log('Scheduled notifications:', scheduled.length);
+    } catch (error) {
+      console.error('Failed to initialize notification service:', error);
+    }
+  };
 
   // Helper to convert HH:MM to HH:MM:SS for database
   const formatTimeForDb = (time: string) => {
@@ -126,8 +154,13 @@ export const NotificationSettings = () => {
       // Обновляем запланированные уведомления
       if (data.push_enabled) {
         await notificationService.scheduleNotifications(data as any, user.id);
+        
+        // Обновляем статус после планирования
+        const scheduled = await notificationService.getScheduledNotifications();
+        setScheduledCount(scheduled.length);
       } else {
         await notificationService.cancelAllNotifications();
+        setScheduledCount(0);
       }
     },
     onSuccess: () => {
@@ -176,17 +209,45 @@ export const NotificationSettings = () => {
           <Bell className="h-5 w-5 text-primary" />
           <h3 className="font-semibold text-lg">Уведомления</h3>
         </div>
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
-          <div>
-            <Label>Включить уведомления</Label>
-            <p className="text-sm text-muted-foreground">
-              Получать напоминания и уведомления
-            </p>
+        
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
+            <div>
+              <Label>Включить уведомления</Label>
+              <p className="text-sm text-muted-foreground">
+                Получать напоминания и уведомления
+              </p>
+            </div>
+            <Switch
+              checked={formData.push_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, push_enabled: checked })}
+            />
           </div>
-          <Switch
-            checked={formData.push_enabled}
-            onCheckedChange={(checked) => setFormData({ ...formData, push_enabled: checked })}
-          />
+
+          {/* Статус уведомлений */}
+          {permissionStatus && (
+            <div className="p-4 rounded-2xl bg-secondary/30 border border-border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Разрешения:</span>
+                <span className={`text-sm ${
+                  permissionStatus.local === 'granted' ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {permissionStatus.local === 'granted' ? '✓ Предоставлены' : '✗ Не предоставлены'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Запланировано:</span>
+                <span className="text-sm text-foreground">
+                  {scheduledCount} уведомлений
+                </span>
+              </div>
+              {permissionStatus.local !== 'granted' && (
+                <p className="text-xs text-orange-500 mt-2">
+                  ⚠️ Разрешите уведомления в настройках телефона
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
