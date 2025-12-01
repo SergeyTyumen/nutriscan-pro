@@ -12,6 +12,7 @@ import { StreakWidget } from '@/components/StreakWidget';
 import { MealsList } from '@/components/MealsList';
 import { FoodSearchDialog } from '@/components/FoodSearchDialog';
 import { VitaButton } from '@/components/VitaButton';
+import { PlanWidget } from '@/components/PlanWidget';
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -138,6 +139,8 @@ const Index = () => {
           <CaloriesWidget selectedDate={currentDate} />
           
           <MacrosWidget selectedDate={currentDate} />
+          
+          {isToday && <PlanWidget />}
           
           <div className="grid grid-cols-1 gap-4">
             <WaterWidget selectedDate={currentDate} />

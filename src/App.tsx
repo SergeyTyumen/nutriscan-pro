@@ -15,6 +15,7 @@ import ProfileNotifications from "./pages/ProfileNotifications";
 import Recipes from "./pages/Recipes";
 import MealDetail from "./pages/MealDetail";
 import Assistant from "./pages/Assistant";
+import MealPlanner from "./pages/MealPlanner";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const AppContent = () => {
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/profile/notifications" element={<ProtectedRoute><ProfileNotifications /></ProtectedRoute>} />
         <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+        <Route path="/planner" element={<ProtectedRoute><MealPlanner /></ProtectedRoute>} />
         <Route path="/meal/:mealId" element={<ProtectedRoute><MealDetail /></ProtectedRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />

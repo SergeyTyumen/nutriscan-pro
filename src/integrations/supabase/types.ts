@@ -141,6 +141,100 @@ export type Database = {
           },
         ]
       }
+      meal_plan_items: {
+        Row: {
+          calories: number
+          carbs: number
+          category: string | null
+          created_at: string
+          fat: number
+          food_name: string
+          id: string
+          plan_id: string
+          protein: number
+          quantity: number
+          source: string | null
+          source_id: string | null
+          unit: string
+        }
+        Insert: {
+          calories: number
+          carbs?: number
+          category?: string | null
+          created_at?: string
+          fat?: number
+          food_name: string
+          id?: string
+          plan_id: string
+          protein?: number
+          quantity: number
+          source?: string | null
+          source_id?: string | null
+          unit: string
+        }
+        Update: {
+          calories?: number
+          carbs?: number
+          category?: string | null
+          created_at?: string
+          fat?: number
+          food_name?: string
+          id?: string
+          plan_id?: string
+          protein?: number
+          quantity?: number
+          source?: string | null
+          source_id?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_plans: {
+        Row: {
+          created_at: string
+          id: string
+          meal_type: string
+          plan_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meal_type: string
+          plan_date?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meal_type?: string
+          plan_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meals: {
         Row: {
           created_at: string
