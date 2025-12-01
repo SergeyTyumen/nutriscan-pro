@@ -14,22 +14,26 @@ type MealData = {
 type Props = {
   data: MealData[];
   period: 'week' | 'month';
+  dailyGoal?: number;
 };
 
-export const CaloriesChart = ({ data, period }: Props) => {
+export const CaloriesChart = ({ data, period, dailyGoal = 2000 }: Props) => {
   // Группируем данные по дням
   const groupedData = data.reduce((acc, meal) => {
     const date = meal.meal_date;
     if (!acc[date]) {
-      acc[date] = { date, calories: 0 };
+      acc[date] = { date, calories: 0, exceeded: false };
     }
     acc[date].calories += meal.total_calories;
+    acc[date].exceeded = acc[date].calories > dailyGoal;
     return acc;
-  }, {} as Record<string, { date: string; calories: number }>);
+  }, {} as Record<string, { date: string; calories: number; exceeded: boolean }>);
 
   const chartData = Object.values(groupedData).map(item => ({
     date: format(new Date(item.date), period === 'week' ? 'EEE' : 'dd MMM', { locale: ru }),
     calories: item.calories,
+    exceeded: item.exceeded,
+    goal: dailyGoal,
   }));
 
   const averageCalories = chartData.length > 0
@@ -37,10 +41,17 @@ export const CaloriesChart = ({ data, period }: Props) => {
     : 0;
 
   const totalCalories = chartData.reduce((sum, item) => sum + item.calories, 0);
+  
+  // Calculate exceeding statistics
+  const daysExceeded = chartData.filter(item => item.exceeded).length;
+  const totalDays = chartData.length;
+  const averageOvershoot = daysExceeded > 0
+    ? Math.round(chartData.filter(item => item.exceeded).reduce((sum, item) => sum + (item.calories - dailyGoal), 0) / daysExceeded)
+    : 0;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <Card className="bg-gradient-primary p-4 text-white shadow-md border-0">
           <p className="text-sm opacity-90 mb-1">Среднее в день</p>
           <p className="text-3xl font-bold">{averageCalories}</p>
@@ -50,6 +61,11 @@ export const CaloriesChart = ({ data, period }: Props) => {
           <p className="text-sm opacity-90 mb-1">Всего за период</p>
           <p className="text-3xl font-bold">{totalCalories}</p>
           <p className="text-xs opacity-75 mt-1">ккал</p>
+        </Card>
+        <Card className={`p-4 text-white shadow-md border-0 ${daysExceeded > 0 ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-green-500 to-green-600'}`}>
+          <p className="text-sm opacity-90 mb-1">Превышений</p>
+          <p className="text-3xl font-bold">{daysExceeded}</p>
+          <p className="text-xs opacity-75 mt-1">из {totalDays} дней {averageOvershoot > 0 && `(+${averageOvershoot} ккал)`}</p>
         </Card>
       </div>
 
@@ -81,12 +97,35 @@ export const CaloriesChart = ({ data, period }: Props) => {
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
               />
               <Legend />
+              {/* Goal line */}
+              <Line
+                type="monotone"
+                dataKey="goal"
+                stroke="hsl(var(--muted-foreground))"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                name="Цель"
+              />
+              {/* Actual calories with color-coded dots */}
               <Line
                 type="monotone"
                 dataKey="calories"
                 stroke="hsl(var(--primary))"
                 strokeWidth={3}
-                dot={{ fill: 'hsl(var(--primary))', r: 5 }}
+                dot={(props: any) => {
+                  const { cx, cy, payload } = props;
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={5}
+                      fill={payload.exceeded ? '#ef4444' : '#10b981'}
+                      stroke="white"
+                      strokeWidth={2}
+                    />
+                  );
+                }}
                 name="Калории"
               />
             </LineChart>

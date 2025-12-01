@@ -96,11 +96,10 @@ serve(async (req) => {
     console.log("Meal budget:", mealBudget);
     console.log("Remaining budget:", budget);
 
-    // Get food database items for recommendations
+    // Get ALL food database items
     const { data: foodItems } = await supabase
       .from("food_database")
-      .select("*")
-      .limit(100);
+      .select("*");
 
     if (!lovableApiKey) {
       console.warn("LOVABLE_API_KEY not found, returning fallback");
@@ -115,6 +114,63 @@ serve(async (req) => {
       );
     }
 
+    // Meal type allowed categories mapping
+    const mealTypeAllowedCategories: Record<string, string[]> = {
+      breakfast: ["Крупы", "Молочные продукты", "Яйца", "Фрукты", "Орехи"],
+      lunch: ["Мясо", "Рыба", "Крупы", "Овощи", "Хлеб", "Бобовые"],
+      dinner: ["Мясо", "Рыба", "Овощи", "Молочные продукты", "Яйца"],
+      snack: ["Орехи", "Фрукты", "Молочные продукы"],
+    };
+
+    const allowedCategories = mealTypeAllowedCategories[mealType] || [];
+    const selectedNames = (selected || []).map((s: any) => s.food_name);
+
+    // PREPROCESSING: Filter and calculate portions algorithmically
+    const preprocessedFoods = (foodItems || [])
+      // 1. Filter by allowed categories for this meal type
+      .filter((f) => allowedCategories.includes(f.category || ""))
+      // 2. Exclude already selected foods
+      .filter((f) => !selectedNames.includes(f.name))
+      // 3. Calculate optimal portion mathematically
+      .map((f) => {
+        // Calculate max quantity by calories (don't exceed 40% of remaining budget per item)
+        const maxByCalories = Math.round((budget.calories * 0.4 / f.calories_per_100g) * 100);
+        // Cap at reasonable maximum (200g for most foods)
+        const optimalQuantity = Math.min(maxByCalories, 200);
+        
+        const calories = Math.round((f.calories_per_100g * optimalQuantity) / 100);
+        const protein = Math.round((f.protein_per_100g * optimalQuantity) / 100);
+        const fat = Math.round((f.fat_per_100g * optimalQuantity) / 100);
+        const carbs = Math.round((f.carbs_per_100g * optimalQuantity) / 100);
+
+        return {
+          name: f.name,
+          category: f.category,
+          quantity: optimalQuantity,
+          unit: "г",
+          calories,
+          protein,
+          fat,
+          carbs,
+          caloriesPer100g: f.calories_per_100g,
+          proteinPer100g: f.protein_per_100g,
+          fatPer100g: f.fat_per_100g,
+          carbsPer100g: f.carbs_per_100g,
+        };
+      })
+      // 4. Filter out items that don't fit the budget or are too small
+      .filter((f) => f.calories <= budget.calories && f.calories >= 20)
+      // 5. Sort by priority based on meal type
+      .sort((a, b) => {
+        if (mealType === "dinner") return b.protein - a.protein; // Prioritize protein for dinner
+        if (mealType === "breakfast") return b.carbs - a.carbs; // Prioritize carbs for breakfast
+        return b.calories - a.calories; // Default: by calories
+      })
+      // 6. Take top 8 candidates
+      .slice(0, 8);
+
+    console.log(`Preprocessed ${preprocessedFoods.length} foods from ${foodItems?.length || 0} total`);
+
     const categoryMap: Record<string, string> = {
       protein: "Белок (мясо, рыба, яйца)",
       carbs: "Гарнир (крупы, хлеб)",
@@ -123,69 +179,47 @@ serve(async (req) => {
       fruits: "Фрукты и перекусы",
     };
 
-    const mealTypeContext: Record<string, string> = {
-      breakfast: "ЗАВТРАК - утренний приём пищи. Подходят: каши, яйца, творог, йогурт, фрукты, орехи, тосты, мюсли",
-      lunch: "ОБЕД - основной приём пищи. Подходят: мясо, рыба, курица, крупы, макароны, овощи, супы, салаты",
-      dinner: "УЖИН - вечерний приём пищи. Подходят: белковые продукты (рыба, курица, творог), овощи, легкие гарниры",
-      snack: "ПЕРЕКУС - лёгкий приём пищи между основными. Подходят: фрукты, орехи, йогурт, творог, батончики, сухофрукты, овощные палочки"
-    };
+    const systemPrompt = `Ты — персональный нутрициолог. 
 
-    const systemPrompt = `Ты — персональный нутрициолог. Помогаешь пользователю подобрать продукты для ${mealType || "приёма пищи"}.
+КОНТЕКСТ:
+- Приём пищи: ${mealType}
+- Бюджет приёма: ${mealBudget.calories} ккал (${Math.round(mealPercent * 100)}% от дневной нормы)
+- Осталось добрать: ${budget.calories} ккал
 
-${mealTypeContext[mealType] || ""}
+УЖЕ ВЫБРАНО:
+${selected?.length > 0 ? selected.map((s: any) => `- ${s.food_name} ${s.quantity}${s.unit}: ${s.calories} ккал`).join("\n") : "Ничего не выбрано"}
 
-БЮДЖЕТ для этого приёма пищи (${Math.round(mealPercent * 100)}% от дневной нормы):
-- Калории: ${mealBudget.calories} ккал
-- Белки: ${mealBudget.protein}г
-- Жиры: ${mealBudget.fat}г
-- Углеводы: ${mealBudget.carbs}г
+ОТФИЛЬТРОВАННЫЕ ПРОДУКТЫ (уже рассчитаны порции, подходят по категории и бюджету):
+${preprocessedFoods.map((f, idx) => `${idx + 1}. ${f.name} ${f.quantity}г: ${f.calories} ккал (Б: ${f.protein}г, Ж: ${f.fat}г, У: ${f.carbs}г)`).join("\n")}`;
 
-УЖЕ ВЫБРАНО в планировщике для этого приёма:
-${selected?.length > 0 ? selected.map((s: any) => `- ${s.food_name} ${s.quantity}${s.unit}: ${s.calories} ккал (Б: ${s.protein}г, Ж: ${s.fat}г, У: ${s.carbs}г)`).join("\n") : "Ничего не выбрано"}
-
-ОСТАВШИЙСЯ БЮДЖЕТ для этого приёма:
-- Калории: ${budget.calories} ккал
-- Белки: ${budget.protein}г
-- Жиры: ${budget.fat}г
-- Углеводы: ${budget.carbs}г
-
-ТЕКУЩАЯ КАТЕГОРИЯ: ${categoryMap[step] || "Финальный обзор"}
-
-ДОСТУПНЫЕ ПРОДУКТЫ из базы (${foodItems?.length || 0}):
-${foodItems?.slice(0, 50).map((f) => `${f.name}: ${f.calories_per_100g} ккал/100г, Б: ${f.protein_per_100g}г, Ж: ${f.fat_per_100g}г, У: ${f.carbs_per_100g}г`).join("\n")}`;
-
-    const userPrompt = `Верни JSON с рекомендациями для категории "${categoryMap[step]}":
+    const userPrompt = `Из предложенного списка выбери 3-5 ЛУЧШИХ продуктов для пользователя. Верни JSON:
 
 {
   "items": [
     {
-      "food_name": "название продукта",
-      "quantity": число (граммы/мл),
-      "unit": "г" или "мл",
-      "calories": число,
-      "protein": число,
-      "fat": число,
-      "carbs": число,
+      "food_name": "название из списка",
+      "quantity": порция из списка,
+      "unit": "г",
+      "calories": калории из списка,
+      "protein": белки из списка,
+      "fat": жиры из списка,
+      "carbs": углеводы из списка,
       "category": "${categoryMap[step]}",
-      "reason": "почему рекомендуешь (учитывая оставшийся бюджет)",
-      "priority": 1-5 (приоритет)
+      "reason": "1 короткое предложение почему подходит",
+      "priority": 1-5
     }
   ],
-  "message": "короткое сообщение пользователю о текущем шаге",
+  "message": "короткое сообщение (1 предложение)",
   "nextStep": "${step === "protein" ? "carbs" : step === "carbs" ? "vegetables" : step === "vegetables" ? "dairy" : step === "dairy" ? "fruits" : "review"}",
   "budget": ${JSON.stringify(budget)}
 }
 
 ВАЖНО:
-- Подбери 3-5 КОНКРЕТНЫХ продуктов из базы данных для текущей категории
-- ОБЯЗАТЕЛЬНО учитывай тип приёма пищи (${mealType}): ${mealTypeContext[mealType] || ""}
-- Рассчитай оптимальное количество, чтобы попасть в БЮДЖЕТ ПРИЁМА ПИЩИ (${mealBudget.calories} ккал)
-- Учитывай уже выбранные продукты
-- НЕ превышай оставшийся бюджет для ЭТОГО приёма (${budget.calories} ккал)
-- Порции должны быть разумными и не превышать половину оставшегося бюджета
-- Для перекуса НЕ предлагай крупы, супы или основные блюда - только лёгкие продукты
-- Для завтрака подходят лёгкие каши, яйца, молочка
-- Для обеда и ужина можно полноценные гарниры и белковые блюда`;
+- Выбирай ТОЛЬКО из предложенных ${preprocessedFoods.length} продуктов
+- Используй ТОЧНЫЕ значения quantity, calories, protein, fat, carbs из списка
+- НЕ придумывай свои порции - они уже рассчитаны
+- Причина должна быть короткой (макс 10 слов)
+- Если продуктов мало или нет - верни пустой items и объясни почему в message`;
 
     console.log("Calling Lovable AI for meal planning...");
 
