@@ -120,8 +120,15 @@ const Profile = () => {
   };
 
   const calculateGoalsWithAI = async () => {
-    if (!formData.age || !formData.gender || !formData.height || !formData.current_weight || !formData.activity_level) {
-      toast.error('Заполните все личные данные');
+    const missingFields = [];
+    if (!formData.age) missingFields.push('Возраст');
+    if (!formData.gender) missingFields.push('Пол');
+    if (!formData.height) missingFields.push('Рост');
+    if (!formData.current_weight) missingFields.push('Вес');
+    if (!formData.activity_level) missingFields.push('Уровень активности');
+    
+    if (missingFields.length > 0) {
+      toast.error(`Заполните: ${missingFields.join(', ')}`);
       return;
     }
 
@@ -355,7 +362,7 @@ const Profile = () => {
                   onValueChange={(value) => setFormData({ ...formData, activity_level: value })}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue />
+                    <SelectValue placeholder="Выберите уровень активности" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sedentary">Сидячий образ жизни</SelectItem>
