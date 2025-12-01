@@ -23,11 +23,18 @@ async function loadSpeechRecognition() {
   }
 }
 
+// Web Speech API для веб-платформы
+const getWebSpeechRecognition = () => {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  return SpeechRecognition;
+}
+
 export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionActiveRef = useRef(false);
+  const webRecognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
   // Load today's stats for context
@@ -63,36 +70,44 @@ export const VitaButton = () => {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
-  // Инициализация для нативной платформы
+  // Инициализация для нативной и веб платформы
   useEffect(() => {
-    if (!isNativePlatform()) return;
+    const initSpeechRecognition = async () => {
+      if (isNativePlatform()) {
+        // Нативная платформа
+        try {
+          const SpeechRecognition = await loadSpeechRecognition();
+          if (!SpeechRecognition) return;
 
-    const initNativeSpeechRecognition = async () => {
-      try {
-        const SpeechRecognition = await loadSpeechRecognition();
-        if (!SpeechRecognition) return;
+          const { available } = await SpeechRecognition.available();
+          if (!available) {
+            console.warn('Speech recognition not available');
+            return;
+          }
 
-        // Запрашиваем разрешения
-        const { available } = await SpeechRecognition.available();
-        if (!available) {
-          console.warn('Speech recognition not available');
+          const permission = await SpeechRecognition.requestPermissions();
+          if (permission.speechRecognition !== 'granted') {
+            console.warn('Speech recognition permission denied');
+            return;
+          }
+
+          startWakeWordDetection();
+        } catch (error) {
+          console.error('Failed to initialize speech recognition:', error);
+        }
+      } else {
+        // Веб-платформа
+        const SpeechRecognition = getWebSpeechRecognition();
+        if (!SpeechRecognition) {
+          console.warn('Web Speech API not supported');
           return;
         }
 
-        const permission = await SpeechRecognition.requestPermissions();
-        if (permission.speechRecognition !== 'granted') {
-          console.warn('Speech recognition permission denied');
-          return;
-        }
-
-        // Запускаем непрерывное прослушивание wake word
         startWakeWordDetection();
-      } catch (error) {
-        console.error('Failed to initialize speech recognition:', error);
       }
     };
 
-    initNativeSpeechRecognition();
+    initSpeechRecognition();
 
     return () => {
       stopWakeWordDetection();
@@ -100,39 +115,88 @@ export const VitaButton = () => {
   }, []);
 
   const startWakeWordDetection = async () => {
-    if (!isNativePlatform() || recognitionActiveRef.current) return;
+    if (recognitionActiveRef.current) return;
 
     try {
-      const SpeechRecognition = await loadSpeechRecognition();
-      if (!SpeechRecognition) return;
-
       recognitionActiveRef.current = true;
 
-      // Слушатель для частичных результатов
-      SpeechRecognition.addListener('partialResults', (data: any) => {
-        const text = data.matches?.join(' ').toLowerCase() || '';
-        console.log('Wake word detection:', text);
+      if (isNativePlatform()) {
+        // Нативная платформа
+        const SpeechRecognition = await loadSpeechRecognition();
+        if (!SpeechRecognition) return;
 
-        if (text.includes('вита') && state === 'idle') {
-          console.log('Wake word detected!');
-          stopWakeWordDetection();
-          startListening();
+        SpeechRecognition.addListener('partialResults', (data: any) => {
+          const text = data.matches?.join(' ').toLowerCase() || '';
+          console.log('[WAKE WORD] Detecting:', text);
+
+          if (text.includes('вита') && state === 'idle') {
+            console.log('[WAKE WORD] Detected!');
+            stopWakeWordDetection();
+            startListening();
+          }
+        });
+
+        await SpeechRecognition.start({
+          language: 'ru-RU',
+          partialResults: true,
+          popup: false,
+        });
+
+        console.log('[WAKE WORD] Started (native)');
+      } else {
+        // Веб-платформа
+        const SpeechRecognition = getWebSpeechRecognition();
+        if (!SpeechRecognition) {
+          recognitionActiveRef.current = false;
+          return;
         }
-      });
 
-      // Запуск распознавания
-      await SpeechRecognition.start({
-        language: 'ru-RU',
-        partialResults: true,
-        popup: false,
-      });
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'ru-RU';
 
-      console.log('Wake word detection started (native)');
+        recognition.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((result: any) => result[0].transcript)
+            .join('')
+            .toLowerCase();
+
+          console.log('[WAKE WORD] Detecting:', transcript);
+
+          if (transcript.includes('вита') && state === 'idle') {
+            console.log('[WAKE WORD] Detected!');
+            stopWakeWordDetection();
+            startListening();
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error('[WAKE WORD] Error:', event.error);
+          if (event.error !== 'aborted') {
+            recognitionActiveRef.current = false;
+            setTimeout(() => {
+              if (state === 'idle') startWakeWordDetection();
+            }, 2000);
+          }
+        };
+
+        recognition.onend = () => {
+          console.log('[WAKE WORD] Ended, restarting...');
+          if (recognitionActiveRef.current && state === 'idle') {
+            setTimeout(() => startWakeWordDetection(), 500);
+          }
+        };
+
+        webRecognitionRef.current = recognition;
+        recognition.start();
+
+        console.log('[WAKE WORD] Started (web)');
+      }
     } catch (error) {
-      console.error('Failed to start wake word detection:', error);
+      console.error('[WAKE WORD] Failed to start:', error);
       recognitionActiveRef.current = false;
       
-      // Повторная попытка через 2 секунды
       setTimeout(() => {
         if (state === 'idle') startWakeWordDetection();
       }, 2000);
@@ -140,18 +204,26 @@ export const VitaButton = () => {
   };
 
   const stopWakeWordDetection = async () => {
-    if (!isNativePlatform() || !recognitionActiveRef.current) return;
+    if (!recognitionActiveRef.current) return;
 
     try {
-      const SpeechRecognition = await loadSpeechRecognition();
-      if (!SpeechRecognition) return;
-
-      await SpeechRecognition.stop();
-      SpeechRecognition.removeAllListeners();
+      if (isNativePlatform()) {
+        const SpeechRecognition = await loadSpeechRecognition();
+        if (SpeechRecognition) {
+          await SpeechRecognition.stop();
+          SpeechRecognition.removeAllListeners();
+        }
+      } else {
+        if (webRecognitionRef.current) {
+          webRecognitionRef.current.stop();
+          webRecognitionRef.current = null;
+        }
+      }
+      
       recognitionActiveRef.current = false;
-      console.log('Wake word detection stopped');
+      console.log('[WAKE WORD] Stopped');
     } catch (error) {
-      console.error('Failed to stop wake word detection:', error);
+      console.error('[WAKE WORD] Failed to stop:', error);
     }
   };
 
@@ -558,7 +630,7 @@ export const VitaButton = () => {
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
         state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
       }`}
-      title={state === 'idle' ? (isNativePlatform() ? 'Нажмите или скажите "Вита"' : 'Нажмите для записи') : 'Обработка...'}
+      title={state === 'idle' ? 'Скажите "Вита" или нажмите' : 'Обработка...'}
     >
       {getButtonContent()}
       <span className="text-xs font-semibold">Вита</span>
