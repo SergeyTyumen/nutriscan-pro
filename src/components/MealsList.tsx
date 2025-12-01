@@ -5,19 +5,20 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Coffee, Sunrise, Sun, Moon, ChevronRight } from 'lucide-react';
 
-export const MealsList = () => {
+export const MealsList = ({ selectedDate }: { selectedDate?: Date }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const dateStr = (selectedDate || new Date()).toISOString().split('T')[0];
+
   const { data: todayMeals } = useQuery({
-    queryKey: ['today-meals-list', user?.id],
+    queryKey: ['today-meals-list', user?.id, dateStr],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('meals')
         .select('*')
         .eq('user_id', user?.id)
-        .eq('meal_date', today)
+        .eq('meal_date', dateStr)
         .order('meal_time', { ascending: true });
       if (error) throw error;
       return data;

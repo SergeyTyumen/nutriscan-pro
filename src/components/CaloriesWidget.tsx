@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
-export const CaloriesWidget = () => {
+export const CaloriesWidget = ({ selectedDate }: { selectedDate?: Date }) => {
   const { user } = useAuth();
 
   const { data: profile } = useQuery({
@@ -21,15 +21,16 @@ export const CaloriesWidget = () => {
     enabled: !!user?.id,
   });
 
+  const dateStr = (selectedDate || new Date()).toISOString().split('T')[0];
+
   const { data: todayMeals } = useQuery({
-    queryKey: ['today-meals', user?.id],
+    queryKey: ['today-meals', user?.id, dateStr],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('meals')
         .select('total_calories')
         .eq('user_id', user?.id)
-        .eq('meal_date', today);
+        .eq('meal_date', dateStr);
       if (error) throw error;
       return data;
     },
