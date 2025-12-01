@@ -176,7 +176,7 @@ export const PlanWidget = () => {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => navigate('/planner')}
+                  onClick={() => navigate(`/planner?mealType=${type}`)}
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
