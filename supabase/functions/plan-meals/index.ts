@@ -25,10 +25,7 @@ serve(async (req) => {
       },
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
-
-    console.log(`Planning meals for user: ${user.id}`);
+    console.log("Authenticated request to plan-meals");
 
     const { step, selected, mealType } = await req.json();
     console.log(`Step: ${step}, Meal Type: ${mealType}, Selected items: ${selected?.length || 0}`);
@@ -37,7 +34,6 @@ serve(async (req) => {
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", user.id)
       .single();
 
     if (!profile) throw new Error("Profile not found");
@@ -47,7 +43,6 @@ serve(async (req) => {
     const { data: todayMeals } = await supabase
       .from("meals")
       .select("total_calories, total_protein, total_fat, total_carbs")
-      .eq("user_id", user.id)
       .eq("meal_date", today);
 
     const consumed = todayMeals?.reduce(
