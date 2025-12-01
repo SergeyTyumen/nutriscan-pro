@@ -132,7 +132,7 @@ const Camera = () => {
         protein: food.protein,
         fat: food.fat,
         carbs: food.carbs,
-        added_via: 'camera',
+        added_via: 'photo',
         photo_url: capturedImage,
       }));
 

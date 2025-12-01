@@ -286,7 +286,7 @@ const Assistant = () => {
         protein: food.protein,
         fat: food.fat,
         carbs: food.carbs,
-        added_via: 'ai_analysis'
+        added_via: 'manual'
       }));
 
       const { error: foodsError } = await supabase

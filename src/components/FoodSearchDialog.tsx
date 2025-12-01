@@ -81,7 +81,7 @@ export function FoodSearchDialog({ open, onOpenChange }: FoodSearchDialogProps) 
         protein: parseFloat(totalProtein),
         fat: parseFloat(totalFat),
         carbs: parseFloat(totalCarbs),
-        added_via: "database",
+        added_via: "manual",
       });
 
       if (foodError) throw foodError;

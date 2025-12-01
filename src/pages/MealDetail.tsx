@@ -304,7 +304,16 @@ const MealDetail = () => {
                       <h4 className="font-semibold text-foreground mb-1">{food.food_name}</h4>
                       <p className="text-sm text-muted-foreground mb-2">
                         {food.quantity} {food.unit}
-                        {food.added_via && ` • ${food.added_via === 'camera' ? '📸 Камера' : '✍️ Вручную'}`}
+                        {food.added_via && (
+                          <>
+                            {" • "}
+                            {food.added_via === 'photo' && '📸 Камера'}
+                            {food.added_via === 'voice' && '🎙 Голос'}
+                            {food.added_via === 'barcode' && '🔢 Штрихкод'}
+                            {food.added_via === 'recipe' && '📖 Рецепт'}
+                            {food.added_via === 'manual' && '✍️ Вручную'}
+                          </>
+                        )}
                       </p>
                       <div className="flex gap-4 text-sm">
                         <span className="font-semibold">{food.calories} ккал</span>
