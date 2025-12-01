@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Droplet, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const WaterWidget = () => {
+export const WaterWidget = ({ selectedDate }: { selectedDate?: Date }) => {
   const { user, loading } = useAuth();
 
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -23,15 +23,17 @@ export const WaterWidget = () => {
     enabled: !!user?.id,
   });
 
+  const dateStr = (selectedDate || new Date()).toISOString().split('T')[0];
+  const isToday = dateStr === new Date().toISOString().split('T')[0];
+
   const { data: todayWater, refetch } = useQuery({
-    queryKey: ['today-water', user?.id],
+    queryKey: ['today-water', user?.id, dateStr],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('water_log')
         .select('amount_ml')
         .eq('user_id', user?.id)
-        .eq('log_date', today);
+        .eq('log_date', dateStr);
       if (error) throw error;
       return data;
     },
@@ -108,7 +110,8 @@ export const WaterWidget = () => {
         <Button
           onClick={() => addWater(250)}
           size="sm"
-          className="flex-1 bg-gradient-cool hover:opacity-90 text-white border-0"
+          disabled={!isToday}
+          className="flex-1 bg-gradient-cool hover:opacity-90 text-white border-0 disabled:opacity-50"
         >
           <Plus className="w-4 h-4 mr-1" />
           250мл
@@ -116,7 +119,8 @@ export const WaterWidget = () => {
         <Button
           onClick={() => addWater(500)}
           size="sm"
-          className="flex-1 bg-gradient-cool hover:opacity-90 text-white border-0"
+          disabled={!isToday}
+          className="flex-1 bg-gradient-cool hover:opacity-90 text-white border-0 disabled:opacity-50"
         >
           <Plus className="w-4 h-4 mr-1" />
           500мл

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/card';
 
-export const MacrosWidget = () => {
+export const MacrosWidget = ({ selectedDate }: { selectedDate?: Date }) => {
   const { user } = useAuth();
 
   const { data: profile } = useQuery({
@@ -20,15 +20,16 @@ export const MacrosWidget = () => {
     enabled: !!user?.id,
   });
 
+  const dateStr = (selectedDate || new Date()).toISOString().split('T')[0];
+
   const { data: todayMeals } = useQuery({
-    queryKey: ['today-meals-macros', user?.id],
+    queryKey: ['today-meals-macros', user?.id, dateStr],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('meals')
         .select('total_protein, total_fat, total_carbs')
         .eq('user_id', user?.id)
-        .eq('meal_date', today);
+        .eq('meal_date', dateStr);
       if (error) throw error;
       return data;
     },

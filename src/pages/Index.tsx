@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { LogOut, Search, Camera, ChevronLeft, ChevronRight, TrendingUp, Settings, BookMarked } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -16,6 +18,20 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   const formatDate = (date: Date) => {
     const today = new Date();
@@ -50,12 +66,12 @@ const Index = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-md">
-              <span className="text-2xl">🍎</span>
+              <span className="text-2xl">{profile?.avatar_url || '🍎'}</span>
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">Привет!</h1>
               <p className="text-sm text-muted-foreground">
-                {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
+                {profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0]}
               </p>
             </div>
           </div>
@@ -119,12 +135,12 @@ const Index = () => {
         </div>
 
         <div className="space-y-4">
-          <CaloriesWidget />
+          <CaloriesWidget selectedDate={currentDate} />
           
-          <MacrosWidget />
+          <MacrosWidget selectedDate={currentDate} />
           
           <div className="grid grid-cols-1 gap-4">
-            <WaterWidget />
+            <WaterWidget selectedDate={currentDate} />
             <StreakWidget />
           </div>
 
@@ -170,7 +186,7 @@ const Index = () => {
               </Button>
             </div>
             
-            <MealsList />
+            <MealsList selectedDate={currentDate} />
           </div>
         </div>
       </div>

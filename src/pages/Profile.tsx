@@ -105,6 +105,7 @@ const Profile = () => {
     },
     onSuccess: () => {
       toast.success('Профиль обновлён!');
+      // Инвалидируем все запросы профиля, включая те что с user?.id
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['profile-edit'] });
     },
