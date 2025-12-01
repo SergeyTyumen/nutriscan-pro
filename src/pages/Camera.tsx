@@ -88,6 +88,17 @@ const Camera = () => {
     }
   };
 
+  // Маппинг русских типов в английские для БД
+  const mapMealType = (russianType: string): string => {
+    const mapping: Record<string, string> = {
+      'завтрак': 'breakfast',
+      'обед': 'lunch',
+      'ужин': 'dinner',
+      'перекус': 'snack',
+    };
+    return mapping[russianType.toLowerCase()] || 'lunch';
+  };
+
   const handleSaveMeal = async () => {
     if (!analysisResult || !user || !capturedImage) return;
 
@@ -99,7 +110,7 @@ const Camera = () => {
         .from('meals')
         .insert({
           user_id: user.id,
-          meal_type: analysisResult.mealType,
+          meal_type: mapMealType(analysisResult.mealType),
           total_calories: analysisResult.totalCalories,
           total_protein: analysisResult.totalProtein,
           total_fat: analysisResult.totalFat,
