@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Camera from "./pages/Camera";
 import Stats from "./pages/Stats";
 import Profile from "./pages/Profile";
+import ProfileNotifications from "./pages/ProfileNotifications";
 import Recipes from "./pages/Recipes";
 import MealDetail from "./pages/MealDetail";
 import Assistant from "./pages/Assistant";
@@ -33,6 +34,7 @@ const AppContent = () => {
         <Route path="/recipes" element={<ProtectedRoute><Recipes /></ProtectedRoute>} />
         <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/profile/notifications" element={<ProtectedRoute><ProfileNotifications /></ProtectedRoute>} />
         <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
         <Route path="/meal/:mealId" element={<ProtectedRoute><MealDetail /></ProtectedRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
