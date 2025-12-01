@@ -62,7 +62,11 @@ export const MacrosWidget = () => {
               {Math.round(macro.value)}
               <span className="text-sm opacity-75 ml-1">{macro.unit}</span>
             </p>
-            <p className="text-xs opacity-75">из {macro.goal}{macro.unit}</p>
+            <p className="text-xs opacity-75 leading-tight">
+              Рекомендуется: {macro.goal}{macro.unit}
+              <br />
+              Съедено: {Math.round(macro.value)}{macro.unit}
+            </p>
           </div>
         </Card>
       ))}

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Search } from 'lucide-react';
+import { LogOut, Search, Camera, ChevronLeft, ChevronRight, TrendingUp, Settings } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { CaloriesWidget } from '@/components/CaloriesWidget';
 import { MacrosWidget } from '@/components/MacrosWidget';
 import { WaterWidget } from '@/components/WaterWidget';
@@ -12,11 +13,40 @@ import { VitaButton } from '@/components/VitaButton';
 
 const Index = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const formatDate = (date: Date) => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Сегодня';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Вчера';
+    }
+    
+    return date.toLocaleDateString('ru-RU', { 
+      day: 'numeric', 
+      month: 'long',
+      weekday: 'short'
+    });
+  };
+
+  const changeDate = (days: number) => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + days);
+    setCurrentDate(newDate);
+  };
+
+  const isToday = currentDate.toDateString() === new Date().toDateString();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-muted pb-20">
       <div className="container mx-auto px-4 py-6">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-md">
@@ -43,6 +73,51 @@ const Index = () => {
           </div>
         </div>
 
+        {/* Date Navigation */}
+        <div className="flex items-center justify-between mb-4 bg-card rounded-2xl p-3 shadow-sm border border-border">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => changeDate(-1)}
+            className="rounded-xl"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          
+          <div className="text-center">
+            <h2 className="text-lg font-semibold text-foreground">{formatDate(currentDate)}</h2>
+            <p className="text-xs text-muted-foreground">
+              {currentDate.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => changeDate(1)}
+            disabled={isToday}
+            className="rounded-xl"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Quick Links */}
+        <div className="flex gap-2 mb-4">
+          <Link to="/profile" className="flex-1">
+            <Button variant="outline" size="sm" className="w-full gap-2">
+              <Settings className="w-4 h-4" />
+              Настроить цель
+            </Button>
+          </Link>
+          <Link to="/stats" className="flex-1">
+            <Button variant="outline" size="sm" className="w-full gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Смотреть прогресс
+            </Button>
+          </Link>
+        </div>
+
         <div className="space-y-4">
           <CaloriesWidget />
           
@@ -55,15 +130,26 @@ const Index = () => {
 
           <div className="pt-2">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-foreground">Сегодня</h2>
-              <Button
-                onClick={() => setSearchDialogOpen(true)}
-                size="sm"
-                className="gap-2"
-              >
-                <Search className="w-4 h-4" />
-                Добавить еду
-              </Button>
+              <h2 className="text-lg font-semibold text-foreground">Приёмы пищи</h2>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => navigate('/camera')}
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  Сканировать
+                </Button>
+                <Button
+                  onClick={() => setSearchDialogOpen(true)}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Search className="w-4 h-4" />
+                  Добавить
+                </Button>
+              </div>
             </div>
             <MealsList />
           </div>
