@@ -199,8 +199,8 @@ const Recipes = () => {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить рецепт?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Рецепт "{recipe.recipe_name}" будет удалён из избранного.
+               <AlertDialogDescription>
+                Блюдо "{recipe.recipe_name}" будет удалено.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -230,13 +230,13 @@ const Recipes = () => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">Рецепты</h1>
+          <h1 className="text-2xl font-bold text-foreground">Мои блюда</h1>
         </div>
 
         <Tabs defaultValue="all" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 bg-card">
             <TabsTrigger value="all">
-              Все ({allRecipes.length})
+              Мои блюда ({allRecipes.length})
             </TabsTrigger>
             <TabsTrigger value="favorites">
               <Heart className="w-4 h-4 mr-1" />
@@ -250,9 +250,9 @@ const Recipes = () => {
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-primary/10 flex items-center justify-center">
                   <Star className="w-10 h-10 text-primary" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Нет сохранённых рецептов</h3>
+                <h3 className="font-semibold text-lg mb-2">Нет сохранённых блюд</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Сохраняйте часто употребляемые блюда для быстрого добавления
+                  Создайте свои блюда через камеру или вручную, чтобы быстро добавлять их в будущем
                 </p>
                 <Button onClick={() => navigate('/')} className="bg-gradient-primary text-white border-0">
                   На главную
@@ -269,9 +269,9 @@ const Recipes = () => {
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-warm/10 flex items-center justify-center">
                   <Heart className="w-10 h-10 text-red-500" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Нет избранных рецептов</h3>
+                <h3 className="font-semibold text-lg mb-2">Нет избранных блюд</h3>
                 <p className="text-sm text-muted-foreground">
-                  Добавьте рецепты в избранное нажав на ❤️
+                  Добавьте блюда в избранное нажав на ❤️ для быстрого доступа
                 </p>
               </Card>
             ) : (
@@ -284,9 +284,9 @@ const Recipes = () => {
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Добавить рецепт</DialogTitle>
+            <DialogTitle>Добавить блюдо</DialogTitle>
             <DialogDescription>
-              Выберите тип приёма пищи для добавления рецепта в дневник
+              Выберите тип приёма пищи для добавления блюда в дневник
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
