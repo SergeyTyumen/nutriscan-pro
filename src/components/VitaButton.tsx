@@ -32,11 +32,25 @@ const getWebSpeechRecognition = () => {
 export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
   const [isListeningForWakeWord, setIsListeningForWakeWord] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [lastError, setLastError] = useState<string>('');
+  const [micPermission, setMicPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionActiveRef = useRef(false);
   const webRecognitionRef = useRef<any>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // Функция для добавления логов
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString('ru-RU');
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugLogs(prev => [...prev.slice(-9), logMessage]); // Оставляем последние 10
+  };
 
   // Load today's stats for context
   const { data: todayStats } = useQuery({
@@ -82,15 +96,20 @@ export const VitaButton = () => {
 
           const { available } = await SpeechRecognition.available();
           if (!available) {
-            console.warn('Speech recognition not available');
+            addLog('Speech recognition not available');
+            setMicPermission('denied');
             return;
           }
 
           const permission = await SpeechRecognition.requestPermissions();
           if (permission.speechRecognition !== 'granted') {
-            console.warn('Speech recognition permission denied');
+            addLog('Speech recognition permission denied');
+            setMicPermission('denied');
             return;
           }
+          
+          setMicPermission('granted');
+          addLog('Native speech recognition initialized');
 
           startWakeWordDetection();
         } catch (error) {
@@ -101,7 +120,8 @@ export const VitaButton = () => {
         try {
           const SpeechRecognition = getWebSpeechRecognition();
           if (!SpeechRecognition) {
-            console.warn('Web Speech API not supported');
+            addLog('Web Speech API not supported');
+            setMicPermission('denied');
             toast({
               title: "Браузер не поддерживает",
               description: "Используйте Chrome/Edge для голосового управления",
@@ -112,11 +132,14 @@ export const VitaButton = () => {
 
           // Запрашиваем разрешение на микрофон
           await navigator.mediaDevices.getUserMedia({ audio: true });
-          console.log('[WAKE WORD] Microphone permission granted');
+          addLog('Microphone permission granted');
+          setMicPermission('granted');
           
           startWakeWordDetection();
         } catch (error) {
-          console.error('[WAKE WORD] Microphone permission denied:', error);
+          addLog(`Microphone permission error: ${error}`);
+          setMicPermission('denied');
+          setLastError(`Mic permission: ${error}`);
           toast({
             title: "Нужен доступ к микрофону",
             description: "Нажмите на кнопку Вита для записи",
@@ -146,10 +169,10 @@ export const VitaButton = () => {
 
         SpeechRecognition.addListener('partialResults', (data: any) => {
           const text = data.matches?.join(' ').toLowerCase() || '';
-          console.log('[WAKE WORD] Detecting:', text);
+          addLog(`[WAKE WORD] Detecting: ${text}`);
 
           if (text.includes('вита') && state === 'idle') {
-            console.log('[WAKE WORD] Detected!');
+            addLog('[WAKE WORD] Detected!');
             stopWakeWordDetection();
             startListening();
           }
@@ -161,7 +184,7 @@ export const VitaButton = () => {
           popup: false,
         });
 
-        console.log('[WAKE WORD] Started (native)');
+        addLog('[WAKE WORD] Started (native)');
       } else {
         // Веб-платформа
         const SpeechRecognition = getWebSpeechRecognition();
@@ -181,17 +204,18 @@ export const VitaButton = () => {
             .join('')
             .toLowerCase();
 
-          console.log('[WAKE WORD] Detecting:', transcript);
+          addLog(`[WAKE WORD] Detecting: ${transcript}`);
 
           if (transcript.includes('вита') && state === 'idle') {
-            console.log('[WAKE WORD] Detected!');
+            addLog('[WAKE WORD] Detected!');
             stopWakeWordDetection();
             startListening();
           }
         };
 
         recognition.onerror = (event: any) => {
-          console.error('[WAKE WORD] Error:', event.error);
+          addLog(`[WAKE WORD] Error: ${event.error}`);
+          setLastError(`Wake word error: ${event.error}`);
 
           // Если браузер не дает использовать сервис речи — отключаем wake word
           if (event.error === 'network' || event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -214,7 +238,7 @@ export const VitaButton = () => {
         };
 
         recognition.onend = () => {
-          console.log('[WAKE WORD] Ended, restarting...');
+          addLog('[WAKE WORD] Ended, restarting...');
           if (recognitionActiveRef.current && state === 'idle') {
             setTimeout(() => startWakeWordDetection(), 500);
           }
@@ -223,10 +247,11 @@ export const VitaButton = () => {
         webRecognitionRef.current = recognition;
         recognition.start();
 
-        console.log('[WAKE WORD] Started (web)');
+        addLog('[WAKE WORD] Started (web)');
       }
     } catch (error) {
-      console.error('[WAKE WORD] Failed to start:', error);
+      addLog(`[WAKE WORD] Failed to start: ${error}`);
+      setLastError(`Wake word start: ${error}`);
       recognitionActiveRef.current = false;
       
       setTimeout(() => {
@@ -254,17 +279,17 @@ export const VitaButton = () => {
       
       recognitionActiveRef.current = false;
       setIsListeningForWakeWord(false);
-      console.log('[WAKE WORD] Stopped');
+      addLog('[WAKE WORD] Stopped');
     } catch (error) {
-      console.error('[WAKE WORD] Failed to stop:', error);
+      addLog(`[WAKE WORD] Failed to stop: ${error}`);
     }
   };
 
   const startListening = async () => {
     try {
-      console.log('[VITA] Начинаем прослушивание');
-      console.log('[VITA] isNativePlatform:', isNativePlatform());
-      console.log('[VITA] Current state:', state);
+      addLog('[VITA] Начинаем прослушивание');
+      addLog(`[VITA] isNativePlatform: ${isNativePlatform()}`);
+      addLog(`[VITA] Current state: ${state}`);
       
       toast({
         title: "Слушаю",
@@ -275,7 +300,7 @@ export const VitaButton = () => {
       
       // На нативной платформе используем SpeechRecognition
       if (isNativePlatform()) {
-        console.log('[VITA] Используем нативное распознавание речи');
+        addLog('[VITA] Используем нативное распознавание речи');
         const SpeechRecognition = await loadSpeechRecognition();
         if (!SpeechRecognition) {
           throw new Error('Speech recognition not available');
@@ -287,9 +312,9 @@ export const VitaButton = () => {
         // Слушатель для результатов
         const resultListener = SpeechRecognition.addListener('partialResults', async (data: any) => {
           const text = data.matches?.[0] || '';
-          console.log('[VITA] Частичный результат:', text);
+          addLog(`[VITA] Частичный результат: ${text}`);
           if (text) {
-            console.log('[VITA] Распознан текст:', text);
+            addLog(`[VITA] Распознан текст: ${text}`);
             // Останавливаем распознавание
             await SpeechRecognition.stop();
             SpeechRecognition.removeAllListeners();
@@ -319,47 +344,48 @@ export const VitaButton = () => {
               setTimeout(() => startWakeWordDetection(), 1000);
             }
           } catch (e) {
-            console.error('Error stopping recognition:', e);
+            addLog(`Error stopping recognition: ${e}`);
           }
         }, 5000);
 
       } else {
         // На веб-платформе используем MediaRecorder
-        console.log('[VITA] Используем MediaRecorder для веб-платформы');
+        addLog('[VITA] Используем MediaRecorder для веб-платформы');
         
-        console.log('[VITA] Запрашиваем доступ к микрофону...');
+        addLog('[VITA] Запрашиваем доступ к микрофону...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('[VITA] Доступ к микрофону получен');
+        addLog('[VITA] Доступ к микрофону получен');
         
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
 
         mediaRecorder.ondataavailable = (event) => {
-          console.log('[VITA] Получены аудио данные, размер:', event.data.size);
+          addLog(`[VITA] Получены аудио данные, размер: ${event.data.size}`);
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
           }
         };
 
         mediaRecorder.onstop = async () => {
-          console.log('[VITA] Запись остановлена, обрабатываем аудио...');
+          addLog('[VITA] Запись остановлена, обрабатываем аудио...');
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          console.log('[VITA] Размер аудио blob:', audioBlob.size);
+          addLog(`[VITA] Размер аудио blob: ${audioBlob.size}`);
           stream.getTracks().forEach(track => track.stop());
           await processAudio(audioBlob);
         };
 
         mediaRecorder.onerror = (event: any) => {
-          console.error('[VITA] MediaRecorder error:', event.error);
+          addLog(`[VITA] MediaRecorder error: ${event.error}`);
+          setLastError(`MediaRecorder: ${event.error}`);
         };
 
-        console.log('[VITA] Начинаем запись...');
+        addLog('[VITA] Начинаем запись...');
         mediaRecorder.start();
 
         // Автоматическая остановка через 5 секунд
         setTimeout(() => {
-          console.log('[VITA] 5 секунд прошло, останавливаем запись');
+          addLog('[VITA] 5 секунд прошло, останавливаем запись');
           if (mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
           }
@@ -367,12 +393,8 @@ export const VitaButton = () => {
       }
 
     } catch (error: any) {
-      console.error('[VITA] Error starting recording:', error);
-      console.error('[VITA] Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
+      addLog(`[VITA] Error starting recording: ${error.message}`);
+      setLastError(`Start recording: ${error.message}`);
       
       toast({
         title: "Ошибка",
@@ -390,7 +412,7 @@ export const VitaButton = () => {
 
   const processVoiceCommand = async (text: string) => {
     try {
-      console.log('[VITA] Начинаем обработку команды:', text);
+      addLog(`[VITA] Начинаем обработку команды: ${text}`);
       
       toast({
         title: "Обрабатываю команду",
@@ -399,7 +421,7 @@ export const VitaButton = () => {
       
       setState('processing');
 
-      console.log('[VITA] Отправляем запрос в ai-assistant...');
+      addLog('[VITA] Отправляем запрос в ai-assistant...');
       
       // Get user ID
       const { data: { user } } = await supabase.auth.getUser();
@@ -417,10 +439,11 @@ export const VitaButton = () => {
         }
       });
 
-      console.log('[VITA] Ответ от ai-assistant:', { aiResponse, aiError });
+      addLog(`[VITA] Ответ от ai-assistant получен`);
 
       if (aiError) {
-        console.error('[VITA] AI error:', aiError);
+        addLog(`[VITA] AI error: ${aiError.message}`);
+        setLastError(`AI error: ${aiError.message}`);
         toast({
           title: "Ошибка AI",
           description: aiError.message || 'Сервер недоступен',
@@ -430,7 +453,7 @@ export const VitaButton = () => {
       }
 
       if (!aiResponse) {
-        console.error('[VITA] No AI response');
+        addLog('[VITA] No AI response');
         toast({
           title: "Нет ответа",
           description: "AI не вернул ответ",
@@ -439,7 +462,7 @@ export const VitaButton = () => {
         throw new Error('No AI response received');
       }
 
-      console.log('[VITA] AI response успешно получен:', aiResponse);
+      addLog('[VITA] AI response успешно получен');
       
       toast({
         title: "Озвучиваю ответ",
@@ -451,7 +474,8 @@ export const VitaButton = () => {
       await speakResponse(aiResponse.response || aiResponse.message || 'Не удалось получить ответ');
 
     } catch (error: any) {
-      console.error('Processing error:', error);
+      addLog(`Processing error: ${error.message}`);
+      setLastError(`Processing: ${error.message}`);
       
       // Показываем дружественную ошибку пользователю
       if (error.message?.includes('429') || error.status === 429) {
@@ -485,50 +509,51 @@ export const VitaButton = () => {
 
   const processAudio = async (audioBlob: Blob) => {
     try {
-      console.log('[VITA] Начинаем обработку аудио blob');
+      addLog('[VITA] Начинаем обработку аудио blob');
       setState('processing');
 
       // Конвертируем в base64
-      console.log('[VITA] Конвертируем аудио в base64...');
+      addLog('[VITA] Конвертируем аудио в base64...');
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       
       reader.onloadend = async () => {
-        console.log('[VITA] Base64 конвертация завершена');
+        addLog('[VITA] Base64 конвертация завершена');
         const base64Audio = reader.result?.toString().split(',')[1];
         
         if (!base64Audio) {
           throw new Error('Failed to convert audio');
         }
 
-        console.log('[VITA] Размер base64 аудио:', base64Audio.length);
+        addLog(`[VITA] Размер base64 аудио: ${base64Audio.length}`);
 
         try {
           // Отправляем на распознавание
-          console.log('[VITA] Отправляем на voice-to-text edge function...');
+          addLog('[VITA] Отправляем на voice-to-text edge function...');
           const { data: transcription, error: transcriptionError } = await supabase.functions.invoke('voice-to-text', {
             body: { audio: base64Audio }
           });
 
-          console.log('[VITA] Ответ от voice-to-text:', { transcription, transcriptionError });
+          addLog('[VITA] Ответ от voice-to-text получен');
 
           if (transcriptionError) {
-            console.error('[VITA] Transcription error:', transcriptionError);
+            addLog(`[VITA] Transcription error: ${transcriptionError.message}`);
+            setLastError(`Transcription: ${transcriptionError.message}`);
             throw transcriptionError;
           }
 
           if (!transcription?.text) {
-            console.error('[VITA] No transcription text in response');
+            addLog('[VITA] No transcription text in response');
             throw new Error('No transcription text received');
           }
 
-          console.log('[VITA] Распознанный текст:', transcription.text);
+          addLog(`[VITA] Распознанный текст: ${transcription.text}`);
 
-          console.log('[VITA] Отправляем текст в AI assistant...');
+          addLog('[VITA] Отправляем текст в AI assistant...');
 
           // Get user ID
           const { data: { user } } = await supabase.auth.getUser();
-          console.log('[VITA] User ID:', user?.id);
+          addLog(`[VITA] User ID: ${user?.id}`);
 
           // Отправляем в AI ассистента с контекстом
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
@@ -543,31 +568,28 @@ export const VitaButton = () => {
             }
           });
 
-          console.log('[VITA] Ответ от AI assistant:', { aiResponse, aiError });
+          addLog('[VITA] Ответ от AI assistant получен');
 
           if (aiError) {
-            console.error('[VITA] AI error:', aiError);
+            addLog(`[VITA] AI error: ${aiError.message}`);
+            setLastError(`AI: ${aiError.message}`);
             throw aiError;
           }
 
           if (!aiResponse) {
-            console.error('[VITA] No AI response');
+            addLog('[VITA] No AI response');
             throw new Error('No AI response received');
           }
 
-          console.log('[VITA] AI response успешно получен');
+          addLog('[VITA] AI response успешно получен');
 
           // Озвучиваем ответ
           setState('speaking');
           await speakResponse(aiResponse.response || aiResponse.message || 'Не удалось получить ответ');
 
         } catch (error: any) {
-          console.error('[VITA] Processing error (inner catch):', error);
-          console.error('[VITA] Error details:', {
-            message: error.message,
-            status: error.status,
-            details: error
-          });
+          addLog(`[VITA] Processing error: ${error.message}`);
+          setLastError(`Processing: ${error.message}`);
           
           // Показываем дружественную ошибку пользователю
           if (error.message?.includes('429') || error.status === 429) {
@@ -600,12 +622,8 @@ export const VitaButton = () => {
       };
 
     } catch (error: any) {
-      console.error('[VITA] Error processing audio (outer catch):', error);
-      console.error('[VITA] Error details:', {
-        message: error.message,
-        status: error.status,
-        details: error
-      });
+      addLog(`[VITA] Error processing audio: ${error.message}`);
+      setLastError(`Audio processing: ${error.message}`);
       
       toast({
         title: "Ошибка",
@@ -632,16 +650,17 @@ export const VitaButton = () => {
         .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Заменяем ссылки на текст
         .trim();
       
-      console.log('[VITA] Запрос озвучки (очищенный):', cleanText);
+      addLog('[VITA] Запрос озвучки');
       
       const { data: audioData, error: audioError } = await supabase.functions.invoke('text-to-speech', {
         body: { text: cleanText, voice: 'alena' }
       });
 
-      console.log('[VITA] Ответ text-to-speech:', { audioData, audioError });
+      addLog('[VITA] Ответ text-to-speech получен');
 
       if (audioError || !audioData?.audioContent) {
-        console.error('[VITA] Text-to-speech error:', audioError);
+        addLog(`[VITA] Text-to-speech error: ${audioError?.message}`);
+        setLastError(`TTS: ${audioError?.message}`);
         toast({
           title: "Ошибка озвучки",
           description: audioError?.message || 'Сервер недоступен',
@@ -650,7 +669,7 @@ export const VitaButton = () => {
         throw new Error('Failed to generate speech');
       }
 
-      console.log('[VITA] Аудио получено, воспроизводим');
+      addLog('[VITA] Аудио получено, воспроизводим');
 
       // Воспроизводим аудио
       const audio = new Audio(`data:audio/mp3;base64,${audioData.audioContent}`);
@@ -672,12 +691,99 @@ export const VitaButton = () => {
 
       await audio.play();
 
-    } catch (error) {
-      console.error('Error speaking response:', error);
+    } catch (error: any) {
+      addLog(`Error speaking response: ${error.message}`);
+      setLastError(`TTS: ${error.message}`);
       setState('idle');
       if (isNativePlatform()) {
         setTimeout(() => startWakeWordDetection(), 500);
       }
+    }
+  };
+
+  // Тестовые функции
+  const testMicrophone = async () => {
+    try {
+      addLog('[TEST] Testing microphone...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      addLog('[TEST] ✅ Microphone access granted');
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        addLog(`[TEST] ✅ Recording size: ${blob.size} bytes`);
+        stream.getTracks().forEach(track => track.stop());
+        toast({ title: "✅ Микрофон работает", description: `Записано ${blob.size} байт` });
+      };
+      
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 2000);
+    } catch (error: any) {
+      addLog(`[TEST] ❌ Microphone error: ${error.message}`);
+      setLastError(`Test mic: ${error.message}`);
+      toast({ title: "❌ Ошибка микрофона", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const testAI = async () => {
+    try {
+      addLog('[TEST] Testing AI...');
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase.functions.invoke('ai-assistant', {
+        body: { 
+          messages: [{ role: 'user', content: 'Привет' }],
+          userContext: { userId: user?.id }
+        }
+      });
+      
+      if (error) throw error;
+      addLog(`[TEST] ✅ AI response: ${data?.response || data?.message}`);
+      toast({ title: "✅ AI работает", description: data?.response || data?.message });
+    } catch (error: any) {
+      addLog(`[TEST] ❌ AI error: ${error.message}`);
+      setLastError(`Test AI: ${error.message}`);
+      toast({ title: "❌ Ошибка AI", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const testTTS = async () => {
+    try {
+      addLog('[TEST] Testing TTS...');
+      const { data, error } = await supabase.functions.invoke('text-to-speech', {
+        body: { text: 'Привет, я Вита', voice: 'alena' }
+      });
+      
+      if (error || !data?.audioContent) throw error || new Error('No audio');
+      
+      addLog('[TEST] ✅ TTS audio received, playing...');
+      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+      await audio.play();
+      toast({ title: "✅ TTS работает" });
+    } catch (error: any) {
+      addLog(`[TEST] ❌ TTS error: ${error.message}`);
+      setLastError(`Test TTS: ${error.message}`);
+      toast({ title: "❌ Ошибка TTS", description: error.message, variant: "destructive" });
+    }
+  };
+
+  // Обработчики долгого нажатия
+  const handleMouseDown = () => {
+    if (state === 'idle') {
+      longPressTimerRef.current = setTimeout(() => {
+        setShowDebug(prev => !prev);
+        addLog('Debug panel toggled');
+      }, 2000);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
     }
   };
 
@@ -721,11 +827,15 @@ export const VitaButton = () => {
     <div className="relative">
       <button
         onClick={startListening}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchEnd={handleMouseUp}
         disabled={state !== 'idle'}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
           state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
         }`}
-        title={state === 'idle' ? 'Скажите "Вита" или нажмите' : 'Обработка...'}
+        title={state === 'idle' ? 'Скажите "Вита" или нажмите. Держите 2 сек для отладки' : 'Обработка...'}
       >
         {getButtonContent()}
         <span className="text-xs font-semibold">Вита</span>
@@ -736,6 +846,110 @@ export const VitaButton = () => {
         <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" 
              title="Слушаю команду 'Вита'">
           <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></span>
+        </div>
+      )}
+
+      {/* Панель отладки */}
+      {showDebug && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-background border-t-2 border-primary rounded-t-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+            {/* Заголовок */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-lg font-semibold">🔍 Отладка Виты</h3>
+              <button
+                onClick={() => setShowDebug(false)}
+                className="text-muted-foreground hover:text-foreground transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Информация */}
+            <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(80vh-200px)]">
+              {/* Статус */}
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-sm font-medium mb-2">Статус</div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    state === 'idle' ? 'bg-green-500' :
+                    state === 'listening' ? 'bg-blue-500 animate-pulse' :
+                    state === 'processing' ? 'bg-orange-500 animate-spin' :
+                    'bg-purple-500 animate-pulse'
+                  }`} />
+                  <span className="text-sm capitalize">{state}</span>
+                </div>
+              </div>
+
+              {/* Платформа */}
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-sm font-medium mb-2">Платформа</div>
+                <div className="text-sm text-muted-foreground">
+                  {isNativePlatform() ? '📱 Native (Capacitor)' : '🌐 Web Browser'}
+                </div>
+              </div>
+
+              {/* Микрофон */}
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-sm font-medium mb-2">Микрофон</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">
+                    {micPermission === 'granted' ? '✅ Разрешен' :
+                     micPermission === 'denied' ? '❌ Запрещен' :
+                     '❓ Неизвестно'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Последняя ошибка */}
+              {lastError && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                  <div className="text-sm font-medium text-destructive mb-2">❌ Последняя ошибка</div>
+                  <div className="text-xs text-destructive/80 break-words">{lastError}</div>
+                </div>
+              )}
+
+              {/* Логи */}
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-sm font-medium mb-2">📝 Логи (последние 10)</div>
+                <div className="space-y-1 text-xs text-muted-foreground font-mono max-h-48 overflow-y-auto">
+                  {debugLogs.length === 0 ? (
+                    <div className="text-center py-2 text-muted-foreground/50">Логов пока нет</div>
+                  ) : (
+                    debugLogs.map((log, i) => (
+                      <div key={i} className="border-l-2 border-primary/30 pl-2 py-0.5">
+                        {log}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Тестовые кнопки */}
+            <div className="p-4 border-t border-border space-y-2">
+              <div className="text-sm font-medium mb-2">🧪 Тесты</div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={testMicrophone}
+                  className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition"
+                >
+                  🎤 Микрофон
+                </button>
+                <button
+                  onClick={testAI}
+                  className="px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition"
+                >
+                  🤖 AI
+                </button>
+                <button
+                  onClick={testTTS}
+                  className="px-3 py-2 bg-pink-500 hover:bg-pink-600 text-white text-sm rounded-lg transition"
+                >
+                  🔊 TTS
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
