@@ -852,10 +852,10 @@ export const VitaButton = () => {
       {/* Панель отладки */}
       {showDebug && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-background border-t-2 border-primary rounded-t-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+          <div className="bg-background border-t-2 border-primary rounded-t-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
             {/* Заголовок */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-lg font-semibold">🔍 Отладка Виты</h3>
+            <div className="flex items-center justify-between p-3 border-b border-border flex-shrink-0">
+              <h3 className="text-base font-semibold">🔍 Отладка Виты</h3>
               <button
                 onClick={() => setShowDebug(false)}
                 className="text-muted-foreground hover:text-foreground transition"
@@ -864,88 +864,98 @@ export const VitaButton = () => {
               </button>
             </div>
 
-            {/* Информация */}
-            <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(80vh-200px)]">
-              {/* Статус */}
-              <div className="bg-muted rounded-lg p-3">
-                <div className="text-sm font-medium mb-2">Статус</div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${
-                    state === 'idle' ? 'bg-green-500' :
-                    state === 'listening' ? 'bg-blue-500 animate-pulse' :
-                    state === 'processing' ? 'bg-orange-500 animate-spin' :
-                    'bg-purple-500 animate-pulse'
-                  }`} />
-                  <span className="text-sm capitalize">{state}</span>
+            {/* Скроллящийся контейнер со всем содержимым */}
+            <div className="overflow-y-auto flex-1">
+              <div className="p-3 space-y-2">
+                {/* Статус */}
+                <div className="bg-muted rounded-lg p-2">
+                  <div className="text-xs font-medium mb-1">Статус</div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      state === 'idle' ? 'bg-green-500' :
+                      state === 'listening' ? 'bg-blue-500 animate-pulse' :
+                      state === 'processing' ? 'bg-orange-500 animate-spin' :
+                      'bg-purple-500 animate-pulse'
+                    }`} />
+                    <span className="text-xs capitalize">{state}</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Платформа */}
-              <div className="bg-muted rounded-lg p-3">
-                <div className="text-sm font-medium mb-2">Платформа</div>
-                <div className="text-sm text-muted-foreground">
-                  {isNativePlatform() ? '📱 Native (Capacitor)' : '🌐 Web Browser'}
+                {/* Платформа */}
+                <div className="bg-muted rounded-lg p-2">
+                  <div className="text-xs font-medium mb-1">Платформа</div>
+                  <div className="text-xs text-muted-foreground">
+                    {isNativePlatform() ? '📱 Native (Capacitor)' : '🌐 Web Browser'}
+                  </div>
                 </div>
-              </div>
 
-              {/* Микрофон */}
-              <div className="bg-muted rounded-lg p-3">
-                <div className="text-sm font-medium mb-2">Микрофон</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">
-                    {micPermission === 'granted' ? '✅ Разрешен' :
-                     micPermission === 'denied' ? '❌ Запрещен' :
-                     '❓ Неизвестно'}
-                  </span>
+                {/* Микрофон */}
+                <div className="bg-muted rounded-lg p-2">
+                  <div className="text-xs font-medium mb-1">Микрофон</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">
+                      {micPermission === 'granted' ? '✅ Разрешен' :
+                       micPermission === 'denied' ? '❌ Запрещен' :
+                       '❓ Неизвестно'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Последняя ошибка */}
-              {lastError && (
-                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
-                  <div className="text-sm font-medium text-destructive mb-2">❌ Последняя ошибка</div>
-                  <div className="text-xs text-destructive/80 break-words">{lastError}</div>
+                {/* Последняя ошибка */}
+                {lastError && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-2">
+                    <div className="text-xs font-medium text-destructive mb-1">❌ Последняя ошибка</div>
+                    <div className="text-xs text-destructive/80 break-words">{lastError}</div>
+                  </div>
+                )}
+
+                {/* Логи */}
+                <div className="bg-muted rounded-lg p-2">
+                  <div className="text-xs font-medium mb-1">📝 Логи (последние 10)</div>
+                  <div className="space-y-0.5 text-xs text-muted-foreground font-mono max-h-32 overflow-y-auto">
+                    {debugLogs.length === 0 ? (
+                      <div className="text-center py-2 text-muted-foreground/50">Логов пока нет</div>
+                    ) : (
+                      debugLogs.map((log, i) => (
+                        <div key={i} className="border-l-2 border-primary/30 pl-2 py-0.5 break-words">
+                          {log}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              )}
 
-              {/* Логи */}
-              <div className="bg-muted rounded-lg p-3">
-                <div className="text-sm font-medium mb-2">📝 Логи (последние 10)</div>
-                <div className="space-y-1 text-xs text-muted-foreground font-mono max-h-48 overflow-y-auto">
-                  {debugLogs.length === 0 ? (
-                    <div className="text-center py-2 text-muted-foreground/50">Логов пока нет</div>
-                  ) : (
-                    debugLogs.map((log, i) => (
-                      <div key={i} className="border-l-2 border-primary/30 pl-2 py-0.5">
-                        {log}
-                      </div>
-                    ))
-                  )}
+                {/* Тестовые кнопки - теперь внутри скроллящегося контейнера */}
+                <div className="pt-2 space-y-2">
+                  <div className="text-xs font-medium">🧪 Тесты</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={testMicrophone}
+                      className="px-2 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-lg transition"
+                    >
+                      🎤 Микрофон
+                    </button>
+                    <button
+                      onClick={testAI}
+                      className="px-2 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded-lg transition"
+                    >
+                      🤖 AI
+                    </button>
+                    <button
+                      onClick={testTTS}
+                      className="px-2 py-1.5 bg-pink-500 hover:bg-pink-600 text-white text-xs rounded-lg transition"
+                    >
+                      🔊 TTS
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Тестовые кнопки */}
-            <div className="p-4 border-t border-border space-y-2">
-              <div className="text-sm font-medium mb-2">🧪 Тесты</div>
-              <div className="grid grid-cols-3 gap-2">
+                {/* Кнопка закрытия внизу */}
                 <button
-                  onClick={testMicrophone}
-                  className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition"
+                  onClick={() => setShowDebug(false)}
+                  className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary text-sm rounded-lg transition mt-2"
                 >
-                  🎤 Микрофон
-                </button>
-                <button
-                  onClick={testAI}
-                  className="px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition"
-                >
-                  🤖 AI
-                </button>
-                <button
-                  onClick={testTTS}
-                  className="px-3 py-2 bg-pink-500 hover:bg-pink-600 text-white text-sm rounded-lg transition"
-                >
-                  🔊 TTS
+                  Свернуть
                 </button>
               </div>
             </div>

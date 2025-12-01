@@ -51,6 +51,23 @@ export interface NotificationSettings {
 class NotificationService {
   private isInitialized = false;
 
+  // Проверяет доступность плагинов уведомлений без краша
+  async isAvailable(): Promise<{ available: boolean; error?: string }> {
+    if (!isNativePlatform()) {
+      return { available: false, error: 'Not on native platform' };
+    }
+
+    try {
+      const { LocalNotifications, PushNotifications } = await loadNotificationPlugins();
+      if (!LocalNotifications || !PushNotifications) {
+        return { available: false, error: 'Plugins not loaded. Run `npx cap sync android` and rebuild the app' };
+      }
+      return { available: true };
+    } catch (error: any) {
+      return { available: false, error: error.message || 'Failed to load plugins' };
+    }
+  }
+
   async initialize() {
     if (!isNativePlatform()) {
       console.log('Not on native platform, skipping notification initialization');
