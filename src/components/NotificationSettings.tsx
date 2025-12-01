@@ -62,26 +62,38 @@ export const NotificationSettings = () => {
     daily_stats_time: '20:00',
   });
 
+  // Helper to convert HH:MM:SS from DB to HH:MM for input
+  const formatTimeForInput = (time: string | null) => {
+    if (!time) return '';
+    return time.substring(0, 5); // Get HH:MM from HH:MM:SS
+  };
+
   useEffect(() => {
     if (settings) {
       setFormData({
         push_enabled: settings.push_enabled,
         meal_reminders_enabled: settings.meal_reminders_enabled,
-        breakfast_time: settings.breakfast_time || '08:00',
-        lunch_time: settings.lunch_time || '13:00',
-        dinner_time: settings.dinner_time || '19:00',
-        snack_time: settings.snack_time || '',
+        breakfast_time: formatTimeForInput(settings.breakfast_time) || '08:00',
+        lunch_time: formatTimeForInput(settings.lunch_time) || '13:00',
+        dinner_time: formatTimeForInput(settings.dinner_time) || '19:00',
+        snack_time: formatTimeForInput(settings.snack_time) || '',
         water_reminders_enabled: settings.water_reminders_enabled,
         water_reminder_frequency: settings.water_reminder_frequency,
-        water_reminder_start: settings.water_reminder_start || '08:00',
-        water_reminder_end: settings.water_reminder_end || '22:00',
+        water_reminder_start: formatTimeForInput(settings.water_reminder_start) || '08:00',
+        water_reminder_end: formatTimeForInput(settings.water_reminder_end) || '22:00',
         achievement_notifications_enabled: settings.achievement_notifications_enabled,
         motivation_notifications_enabled: settings.motivation_notifications_enabled,
         daily_stats_enabled: settings.daily_stats_enabled,
-        daily_stats_time: settings.daily_stats_time || '20:00',
+        daily_stats_time: formatTimeForInput(settings.daily_stats_time) || '20:00',
       });
     }
   }, [settings]);
+
+  // Helper to convert HH:MM to HH:MM:SS for database
+  const formatTimeForDb = (time: string) => {
+    if (!time) return null;
+    return time.includes(':00') ? time : `${time}:00`;
+  };
 
   const updateSettings = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -92,9 +104,21 @@ export const NotificationSettings = () => {
         await notificationService.initialize();
       }
 
+      // Convert time format for database (HH:MM:SS)
+      const dbData = {
+        ...data,
+        breakfast_time: formatTimeForDb(data.breakfast_time),
+        lunch_time: formatTimeForDb(data.lunch_time),
+        dinner_time: formatTimeForDb(data.dinner_time),
+        snack_time: data.snack_time ? formatTimeForDb(data.snack_time) : null,
+        water_reminder_start: formatTimeForDb(data.water_reminder_start),
+        water_reminder_end: formatTimeForDb(data.water_reminder_end),
+        daily_stats_time: formatTimeForDb(data.daily_stats_time),
+      };
+
       const { error } = await supabase
         .from('notification_settings')
-        .update(data)
+        .update(dbData)
         .eq('user_id', user.id);
 
       if (error) throw error;
