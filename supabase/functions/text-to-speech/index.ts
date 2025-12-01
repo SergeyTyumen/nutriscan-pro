@@ -12,6 +12,8 @@ serve(async (req) => {
 
   try {
     const { text, voice = 'alena' } = await req.json();
+    
+    console.log('Text-to-speech called with text length:', text?.length, 'voice:', voice);
 
     if (!text) {
       throw new Error('Text is required');
