@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
     const authHeader = req.headers.get("Authorization")!;
 
@@ -25,7 +25,10 @@ serve(async (req) => {
       },
     });
 
-    console.log("Authenticated request to plan-meals");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    console.log(`Planning meals for user: ${user.id}`);
 
     const { step, selected, mealType } = await req.json();
     console.log(`Step: ${step}, Meal Type: ${mealType}, Selected items: ${selected?.length || 0}`);
@@ -34,6 +37,7 @@ serve(async (req) => {
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
+      .eq("id", user.id)
       .single();
 
     if (!profile) throw new Error("Profile not found");
@@ -43,6 +47,7 @@ serve(async (req) => {
     const { data: todayMeals } = await supabase
       .from("meals")
       .select("total_calories, total_protein, total_fat, total_carbs")
+      .eq("user_id", user.id)
       .eq("meal_date", today);
 
     const consumed = todayMeals?.reduce(
@@ -102,7 +107,16 @@ serve(async (req) => {
       fruits: "Фрукты и перекусы",
     };
 
+    const mealTypeContext: Record<string, string> = {
+      breakfast: "ЗАВТРАК - утренний приём пищи. Подходят: каши, яйца, творог, йогурт, фрукты, орехи, тосты, мюсли",
+      lunch: "ОБЕД - основной приём пищи. Подходят: мясо, рыба, курица, крупы, макароны, овощи, супы, салаты",
+      dinner: "УЖИН - вечерний приём пищи. Подходят: белковые продукты (рыба, курица, творог), овощи, легкие гарниры",
+      snack: "ПЕРЕКУС - лёгкий приём пищи между основными. Подходят: фрукты, орехи, йогурт, творог, батончики, сухофрукты, овощные палочки"
+    };
+
     const systemPrompt = `Ты — персональный нутрициолог. Помогаешь пользователю подобрать продукты для ${mealType || "приёма пищи"}.
+
+${mealTypeContext[mealType] || ""}
 
 ЦЕЛИ пользователя на день:
 - Калории: ${profile.daily_calorie_goal} ккал
@@ -154,10 +168,14 @@ ${foodItems?.slice(0, 50).map((f) => `${f.name}: ${f.calories_per_100g} ккал
 
 ВАЖНО:
 - Подбери 3-5 КОНКРЕТНЫХ продуктов из базы данных для текущей категории
+- ОБЯЗАТЕЛЬНО учитывай тип приёма пищи (${mealType}): ${mealTypeContext[mealType] || ""}
 - Рассчитай оптимальное количество, чтобы попасть в бюджет
 - Учитывай уже выбранные продукты
 - Если бюджет мал (< 100 ккал), предложи легкие продукты
-- НЕ превышай оставшийся бюджет`;
+- НЕ превышай оставшийся бюджет
+- Для перекуса НЕ предлагай крупы, супы или основные блюда - только лёгкие продукты
+- Для завтрака подходят лёгкие каши, яйца, молочка
+- Для обеда и ужина можно полноценные гарниры и белковые блюда`;
 
     console.log("Calling Lovable AI for meal planning...");
 

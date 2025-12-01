@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Loader2, ChevronRight, Check, Minus, Plus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, ChevronRight, Check, Minus, Plus, RefreshCw } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 
@@ -36,6 +36,7 @@ const MealPlanner = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedItems, setSelectedItems] = useState<PlanItem[]>([]);
@@ -43,6 +44,16 @@ const MealPlanner = () => {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [mealType, setMealType] = useState<string>('');
   const [showMealTypeSelection, setShowMealTypeSelection] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Check if mealType is passed via URL
+  useEffect(() => {
+    const urlMealType = searchParams.get('mealType');
+    if (urlMealType) {
+      setMealType(urlMealType);
+      setShowMealTypeSelection(false);
+    }
+  }, [searchParams]);
 
   const currentStep = steps[currentStepIndex];
 
@@ -62,8 +73,8 @@ const MealPlanner = () => {
   });
 
   // Fetch AI recommendations for current step
-  const { data: recommendations, isLoading } = useQuery({
-    queryKey: ['plan-meals', currentStep.key, selectedItems.length, mealType],
+  const { data: recommendations, isLoading, refetch } = useQuery({
+    queryKey: ['plan-meals', currentStep.key, selectedItems.length, mealType, refreshKey],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('plan-meals', {
         body: { 
@@ -77,6 +88,11 @@ const MealPlanner = () => {
     },
     enabled: !!user?.id && !showMealTypeSelection && currentStep.key !== 'review',
   });
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    refetch();
+  };
 
   const savePlanMutation = useMutation({
     mutationFn: async () => {
@@ -369,8 +385,9 @@ const MealPlanner = () => {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="space-y-3">
-                {recommendations?.items?.map((item: any, idx: number) => {
+              <>
+                <div className="space-y-3">
+                  {recommendations?.items?.map((item: any, idx: number) => {
                   const isChecked = checkedItems[item.food_name];
                   const quantity = itemQuantities[item.food_name] || item.quantity;
                   
@@ -431,7 +448,18 @@ const MealPlanner = () => {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Предложить другие продукты
+                </Button>
+              </>
             )}
           </CardContent>
         </Card>
