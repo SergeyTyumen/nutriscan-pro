@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.calculate-goals]
 verify_jwt = false
+
+[functions.recommend-recipes]
+verify_jwt = false
