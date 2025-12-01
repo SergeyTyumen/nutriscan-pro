@@ -31,6 +31,7 @@ const getWebSpeechRecognition = () => {
 
 export const VitaButton = () => {
   const [state, setState] = useState<VitaState>('idle');
+  const [isListeningForWakeWord, setIsListeningForWakeWord] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionActiveRef = useRef(false);
@@ -96,14 +97,31 @@ export const VitaButton = () => {
           console.error('Failed to initialize speech recognition:', error);
         }
       } else {
-        // Веб-платформа
-        const SpeechRecognition = getWebSpeechRecognition();
-        if (!SpeechRecognition) {
-          console.warn('Web Speech API not supported');
-          return;
-        }
+        // Веб-платформа - запрашиваем разрешение на микрофон
+        try {
+          const SpeechRecognition = getWebSpeechRecognition();
+          if (!SpeechRecognition) {
+            console.warn('Web Speech API not supported');
+            toast({
+              title: "Браузер не поддерживает",
+              description: "Используйте Chrome/Edge для голосового управления",
+              variant: "destructive"
+            });
+            return;
+          }
 
-        startWakeWordDetection();
+          // Запрашиваем разрешение на микрофон
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('[WAKE WORD] Microphone permission granted');
+          
+          startWakeWordDetection();
+        } catch (error) {
+          console.error('[WAKE WORD] Microphone permission denied:', error);
+          toast({
+            title: "Нужен доступ к микрофону",
+            description: "Нажмите на кнопку Вита для записи",
+          });
+        }
       }
     };
 
@@ -119,6 +137,7 @@ export const VitaButton = () => {
 
     try {
       recognitionActiveRef.current = true;
+      setIsListeningForWakeWord(true);
 
       if (isNativePlatform()) {
         // Нативная платформа
@@ -221,6 +240,7 @@ export const VitaButton = () => {
       }
       
       recognitionActiveRef.current = false;
+      setIsListeningForWakeWord(false);
       console.log('[WAKE WORD] Stopped');
     } catch (error) {
       console.error('[WAKE WORD] Failed to stop:', error);
@@ -624,16 +644,26 @@ export const VitaButton = () => {
   };
 
   return (
-    <button
-      onClick={startListening}
-      disabled={state !== 'idle'}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
-        state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
-      }`}
-      title={state === 'idle' ? 'Скажите "Вита" или нажмите' : 'Обработка...'}
-    >
-      {getButtonContent()}
-      <span className="text-xs font-semibold">Вита</span>
-    </button>
+    <div className="relative">
+      <button
+        onClick={startListening}
+        disabled={state !== 'idle'}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md transition-all ${getButtonColor()} ${
+          state !== 'idle' ? 'animate-pulse' : 'hover:scale-105'
+        }`}
+        title={state === 'idle' ? 'Скажите "Вита" или нажмите' : 'Обработка...'}
+      >
+        {getButtonContent()}
+        <span className="text-xs font-semibold">Вита</span>
+      </button>
+      
+      {/* Индикатор прослушивания wake word */}
+      {isListeningForWakeWord && state === 'idle' && (
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" 
+             title="Слушаю команду 'Вита'">
+          <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75"></span>
+        </div>
+      )}
+    </div>
   );
 };
