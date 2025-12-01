@@ -34,9 +34,20 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Get user ID
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id;
+    // Get user ID from context or JWT
+    let userId = userContext?.userId || null;
+    
+    // Try to get from JWT if not in context
+    if (!userId && authHeader) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id || null;
+      } catch (e) {
+        console.log('Failed to get user from JWT, using context userId');
+      }
+    }
+    
+    console.log('User ID resolved:', userId ? 'yes' : 'no');
 
     // Build context string if available
     let contextString = '';

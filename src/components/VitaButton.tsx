@@ -378,13 +378,19 @@ export const VitaButton = () => {
 
       console.log('[VITA] Отправляем запрос в ai-assistant...');
       
+      // Get user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Отправляем в AI ассистента с контекстом
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
         body: { 
           messages: [
             { role: 'user', content: text }
           ],
-          userContext: todayStats
+          userContext: {
+            ...todayStats,
+            userId: user?.id
+          }
         }
       });
 

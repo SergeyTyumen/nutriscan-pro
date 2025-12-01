@@ -140,12 +140,21 @@ const Assistant = () => {
     setMessages(prev => [...prev, newUserMessage]);
 
     try {
+      // Prepare user context with stats and userId
+      const userContext = todayStats ? {
+        calories: { consumed: todayStats.calories, goal: todayStats.caloriesGoal },
+        water: { consumed: todayStats.water, goal: todayStats.waterGoal },
+        mealsCount: todayStats.mealsCount,
+        userId: user.id
+      } : { userId: user.id };
+
       const { data: response, error: invokeError } = await supabase.functions.invoke('ai-assistant', {
         body: {
           messages: [...messages, newUserMessage].map(m => ({
             role: m.role,
             content: m.content
           })),
+          userContext,
           ...(image && { image })
         }
       });
@@ -205,7 +214,8 @@ const Assistant = () => {
             }
           ],
           image,
-          analyzeFood: true
+          analyzeFood: true,
+          userContext: { userId: user.id }
         }
       });
 
