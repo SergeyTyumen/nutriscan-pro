@@ -192,6 +192,19 @@ export const VitaButton = () => {
 
         recognition.onerror = (event: any) => {
           console.error('[WAKE WORD] Error:', event.error);
+
+          // Если браузер не дает использовать сервис речи — отключаем wake word
+          if (event.error === 'network' || event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            recognitionActiveRef.current = false;
+            setIsListeningForWakeWord(false);
+            toast({
+              title: 'Активация по "Вита" недоступна',
+              description: 'В вашем браузере постоянноe прослушивание не поддерживается. Используйте кнопку Вита.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
           if (event.error !== 'aborted') {
             recognitionActiveRef.current = false;
             setTimeout(() => {
