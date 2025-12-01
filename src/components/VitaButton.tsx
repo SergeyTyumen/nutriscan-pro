@@ -457,10 +457,19 @@ export const VitaButton = () => {
 
   const speakResponse = async (text: string) => {
     try {
-      console.log('[VITA] Запрос озвучки:', text);
+      // Очищаем markdown форматирование перед озвучкой
+      const cleanText = text
+        .replace(/\*\*/g, '') // Убираем **
+        .replace(/\*/g, '')   // Убираем *
+        .replace(/#{1,6}\s/g, '') // Убираем заголовки
+        .replace(/`{1,3}/g, '') // Убираем код
+        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Заменяем ссылки на текст
+        .trim();
+      
+      console.log('[VITA] Запрос озвучки (очищенный):', cleanText);
       
       const { data: audioData, error: audioError } = await supabase.functions.invoke('text-to-speech', {
-        body: { text, voice: 'alena' }
+        body: { text: cleanText, voice: 'alena' }
       });
 
       console.log('[VITA] Ответ text-to-speech:', { audioData, audioError });
